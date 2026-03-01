@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm build)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm tauri dev)",
+      "Bash(pnpm tauri build)",
+      "Bash(cd src-tauri && cargo build)"
+    ]
+  }
+}

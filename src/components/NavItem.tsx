@@ -1,0 +1,71 @@
+import { useState, useEffect } from "react"
+import { NavLink } from "react-router-dom"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
+import type { NavItem as NavItemType } from "@/lib/navigation"
+
+interface NavItemProps {
+  item: NavItemType
+  /** Masquer le texte en dessous de lg (mode sidebar responsive) */
+  responsive?: boolean
+  onClick?: () => void
+}
+
+/** Breakpoint lg Tailwind (1024px) */
+const LG_QUERY = "(min-width: 1024px)"
+
+export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
+  const Icon = item.icon
+
+  // Détecte si la sidebar desktop est rétractée (entre md et lg)
+  const [isExpanded, setIsExpanded] = useState(() => window.matchMedia(LG_QUERY).matches)
+
+  useEffect(() => {
+    const mq = window.matchMedia(LG_QUERY)
+    const handler = (e: MediaQueryListEvent) => setIsExpanded(e.matches)
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
+
+  // Tooltip uniquement quand la sidebar desktop est rétractée (icônes seules)
+  const showTooltip = responsive && !isExpanded
+
+  return (
+    <Tooltip open={showTooltip ? undefined : false}>
+      <TooltipTrigger asChild>
+        <div>
+          <NavLink
+            to={item.path}
+            end={item.path === "/"}
+            onClick={onClick}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center rounded-lg py-2 transition-colors",
+                !responsive && "gap-3 px-3",
+                isActive
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )
+            }
+          >
+            {responsive ? (
+              <span className="flex items-center justify-center w-12 shrink-0">
+                <Icon className="h-5 w-5" />
+              </span>
+            ) : (
+              <Icon className="h-5 w-5 shrink-0" />
+            )}
+            <span className={cn(
+              "text-sm whitespace-nowrap",
+              responsive && "transition-opacity duration-200",
+              responsive && !isExpanded && "opacity-0"
+            )}>
+              {item.label}
+            </span>
+          </NavLink>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
+  )
+}

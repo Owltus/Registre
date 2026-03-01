@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Sidebar } from "@/components/Sidebar"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
-import { OwlLogo } from "@/components/OwlLogo"
+import { AppLogo } from "@/components/AppLogo"
 import { APP_NAME } from "@/lib/navigation"
 
 /** Icône « restaurer » Windows : deux carrés superposés */
@@ -52,7 +52,7 @@ export function RootLayout() {
       >
         {/* Gauche : logo + nom (pointer-events-none pour laisser le drag traverser) */}
         <div className="pointer-events-none flex items-center gap-2">
-          <OwlLogo size={20} />
+          <AppLogo size={20} />
           <span className="text-sm font-semibold">{APP_NAME}</span>
         </div>
 

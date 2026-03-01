@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { NavLink } from "react-router-dom"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import type { NavItem as NavItemType } from "@/lib/navigation"
+import type { NavItemData } from "@/lib/navigation"
 
 interface NavItemProps {
-  item: NavItemType
+  item: NavItemData
   /** Masquer le texte en dessous de lg (mode sidebar responsive) */
   responsive?: boolean
   onClick?: () => void
@@ -16,6 +18,20 @@ const LG_QUERY = "(min-width: 1024px)"
 
 export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
   const Icon = item.icon
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
 
   // Détecte si la sidebar desktop est rétractée (entre md et lg)
   const [isExpanded, setIsExpanded] = useState(() => window.matchMedia(LG_QUERY).matches)
@@ -33,10 +49,15 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
   return (
     <Tooltip open={showTooltip ? undefined : false}>
       <TooltipTrigger asChild>
-        <div>
+        <div
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          className={cn("touch-none", isDragging && "z-50 opacity-80")}
+        >
           <NavLink
             to={item.path}
-            end={item.path === "/"}
             onClick={onClick}
             className={({ isActive }) =>
               cn(
@@ -44,7 +65,8 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
                 !responsive && "gap-3 px-3",
                 isActive
                   ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                isDragging && "shadow-md"
               )
             }
           >

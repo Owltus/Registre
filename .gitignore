@@ -8,10 +8,15 @@ dist-ssr
 # Rust build
 src-tauri/target
 
+# Prompts IA
+prompts/
+
 # Database
+sqlite/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 
 # Logs
 logs

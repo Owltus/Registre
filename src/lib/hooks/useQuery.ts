@@ -29,7 +29,7 @@ export function useQuery<T = unknown>(
   }, [table, filters])
 
   useEffect(() => {
-    fetch()
+    fetch() // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetch])
 
   return { data, loading, error, refetch: fetch }

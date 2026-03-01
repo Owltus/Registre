@@ -1,6 +1,6 @@
 export type Theme = "light" | "dark" | "system"
 
-const STORAGE_KEY = "owl-theme"
+const STORAGE_KEY = "registre-securite-theme"
 
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches

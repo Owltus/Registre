@@ -14,18 +14,21 @@ interface Doc {
   id: number
   title: string
   content: string
+  chapter_id: string
   created_at: string
   updated_at: string
 }
 
 export default function DocumentDetail() {
-  const { id } = useParams<{ id: string }>()
+  const { id, chapterId } = useParams<{ id: string; chapterId: string }>()
   const navigate = useNavigate()
   const { update } = useMutation("documents")
   const proseRef = useRef<HTMLDivElement>(null)
   const previewScrollRef = useRef<HTMLDivElement>(null)
   const editorScrollRef = useRef<HTMLTextAreaElement>(null)
   const isSyncing = useRef(false)
+
+  const backPath = chapterId ? `/chapitres/${chapterId}` : "/"
 
   const filters = useMemo(() => ({ id: Number(id) }), [id])
   const { data: docs, loading, refetch } = useQuery<Doc>("documents", filters)
@@ -38,9 +41,10 @@ export default function DocumentDetail() {
   // Synchroniser le state local quand le document est chargé
   useEffect(() => {
     if (doc) {
-      setEditTitle(doc.title)
+      setEditTitle(doc.title)  
       setEditContent(doc.content)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.id])
 
   const handleSave = async () => {
@@ -61,9 +65,6 @@ export default function DocumentDetail() {
   }
 
   // Synchronisation du scroll par mapping bloc-à-bloc
-  // On découpe le source en blocs (séparés par des lignes vides),
-  // on mesure la position de chaque bloc dans les deux panneaux,
-  // et on interpole entre ces ancres pour un scroll précis.
   const syncScroll = useCallback((source: "preview" | "editor") => {
     if (isSyncing.current) return
     isSyncing.current = true
@@ -75,17 +76,14 @@ export default function DocumentDetail() {
       return
     }
 
-    // Blocs rendus dans l'aperçu (enfants directs de .prose)
     const proseEl = previewEl.querySelector(".prose") as HTMLElement | null
     const previewBlocks = proseEl
       ? (Array.from(proseEl.children) as HTMLElement[])
       : []
 
-    // Blocs source (séparés par des lignes vides)
     const sourceBlocks = editContent.split(/\n\n+/)
     const blockCount = Math.min(previewBlocks.length, sourceBlocks.length)
 
-    // Pas assez d'ancres → fallback ratio simple
     if (blockCount < 2) {
       const from = source === "preview" ? previewEl : editorEl
       const to = source === "preview" ? editorEl : previewEl
@@ -98,7 +96,6 @@ export default function DocumentDetail() {
       return
     }
 
-    // Ancres éditeur : position pixel de chaque bloc via le nombre de lignes
     const editorStyle = getComputedStyle(editorEl)
     let lineHeight = parseFloat(editorStyle.lineHeight)
     if (isNaN(lineHeight)) lineHeight = parseFloat(editorStyle.fontSize) * 1.5
@@ -107,12 +104,11 @@ export default function DocumentDetail() {
     const editorAnchors: number[] = [0]
     let cumLines = 0
     for (let i = 0; i < blockCount - 1; i++) {
-      cumLines += sourceBlocks[i].split("\n").length + 1 // +1 pour la ligne vide
+      cumLines += sourceBlocks[i].split("\n").length + 1
       editorAnchors.push(cumLines * lineHeight)
     }
     editorAnchors.push(editorEl.scrollHeight)
 
-    // Ancres aperçu : position pixel de chaque bloc dans le conteneur scrollable
     const containerRect = previewEl.getBoundingClientRect()
     const previewAnchors: number[] = []
     for (let i = 0; i < blockCount; i++) {
@@ -121,7 +117,6 @@ export default function DocumentDetail() {
     }
     previewAnchors.push(previewEl.scrollHeight)
 
-    // Interpolation entre ancres
     const fromAnchors = source === "editor" ? editorAnchors : previewAnchors
     const toAnchors = source === "editor" ? previewAnchors : editorAnchors
     const fromEl = source === "editor" ? editorEl : previewEl
@@ -129,7 +124,6 @@ export default function DocumentDetail() {
 
     const scrollPos = fromEl.scrollTop
 
-    // Trouver l'intervalle contenant la position actuelle
     let idx = 0
     for (let i = 0; i < fromAnchors.length - 1; i++) {
       if (fromAnchors[i + 1] <= scrollPos) idx = i + 1
@@ -169,7 +163,7 @@ export default function DocumentDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
         <p>Document introuvable</p>
-        <Button variant="outline" size="sm" onClick={() => navigate("/documents")}>
+        <Button variant="outline" size="sm" onClick={() => navigate(backPath)}>
           <ArrowLeft className="h-4 w-4 mr-1.5" />
           Retour
         </Button>
@@ -184,7 +178,7 @@ export default function DocumentDetail() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/documents")}
+          onClick={() => navigate(backPath)}
           aria-label="Retour"
         >
           <ArrowLeft className="h-4 w-4" />

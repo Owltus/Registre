@@ -22,3 +22,9 @@ pub fn get_app_info(state: State<AppState>) -> AppInfo {
         arch: std::env::consts::ARCH.to_string(),
     }
 }
+
+/// Retourne l'URL de connexion SQLite utilisée par le backend
+#[tauri::command]
+pub fn get_db_url(state: State<AppState>) -> String {
+    state.db_url.clone()
+}

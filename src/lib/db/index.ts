@@ -1,10 +1,12 @@
 import Database from "@tauri-apps/plugin-sql"
+import { invoke } from "@tauri-apps/api/core"
 
 let dbPromise: Promise<Database> | null = null
 
 export function getDb(): Promise<Database> {
   if (!dbPromise) {
-    dbPromise = Database.load("sqlite:owl.db")
+    dbPromise = invoke<string>("get_db_url")
+      .then((dbUrl) => Database.load(dbUrl))
       .then(async (db) => {
         // PRAGMAs appliqués à chaque connexion (pas en migration car journal_mode retourne un résultat)
         await db.execute("PRAGMA journal_mode = WAL")

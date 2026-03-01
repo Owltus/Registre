@@ -1,12 +1,12 @@
 [package]
-name = "owl-boilerplate"
+name = "registre-de-securite"
 version = "0.1.0"
-description = "A Tauri v2 boilerplate application"
+description = "Registre de Sécurité ERP — Application de gestion"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "owl_boilerplate_lib"
+name = "registre_de_securite_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
@@ -23,3 +23,4 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+dirs = "6"

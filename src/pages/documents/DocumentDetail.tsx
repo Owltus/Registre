@@ -265,7 +265,11 @@ export default function DocumentDetail() {
       ) : (
         // Mode aperçu
         <div className="flex-1 overflow-y-auto p-6">
-          <div ref={proseRef} className="prose max-w-none">
+          <div
+            ref={proseRef}
+            className="prose max-w-none mx-auto"
+            style={{ maxWidth: "210mm" }}
+          >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {editContent}
             </ReactMarkdown>

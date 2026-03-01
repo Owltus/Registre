@@ -48,7 +48,16 @@ const PRINT_STYLES = `
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     color: #111;
     break-after: avoid;
+    page-break-after: avoid;
     break-inside: avoid;
+    page-break-inside: avoid;
+    position: relative;
+  }
+
+  /* Le premier élément après un titre reste collé avec lui */
+  h1 + *, h2 + *, h3 + *, h4 + * {
+    break-before: avoid;
+    page-break-before: avoid;
   }
 
   h1 { font-size: 16pt; margin-top: 0.8cm; margin-bottom: 0.35cm; }
@@ -78,6 +87,14 @@ const PRINT_STYLES = `
 
   li {
     margin-bottom: 0.12cm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Orphelins/veuves dans les items de liste */
+  li p {
+    orphans: 2;
+    widows: 2;
   }
 
   ul.contains-task-list {
@@ -112,6 +129,9 @@ const PRINT_STYLES = `
     word-wrap: break-word;
     overflow-x: visible;
     break-inside: avoid;
+    page-break-inside: avoid;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
 
   pre code {
@@ -128,11 +148,22 @@ const PRINT_STYLES = `
     margin-bottom: 0.4cm;
     font-size: 10pt;
     break-inside: avoid;
+    page-break-inside: avoid;
     table-layout: fixed;
   }
 
+  /* Répéter l'en-tête du tableau sur chaque page */
   thead {
     display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   th {
@@ -155,6 +186,9 @@ const PRINT_STYLES = `
     color: #444;
     font-style: italic;
     break-inside: avoid;
+    page-break-inside: avoid;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
 
   a {
@@ -171,9 +205,22 @@ const PRINT_STYLES = `
 
   img {
     max-width: 100%;
+    max-height: 200mm;
     height: auto;
     break-inside: avoid;
+    page-break-inside: avoid;
     margin-bottom: 0.3cm;
+  }
+
+  /* Image + légende ou paragraphe suivant restent ensemble */
+  img + p, img + em {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+
+  /* Neutraliser les floats qui cassent la fragmentation */
+  [style*="float"] {
+    float: none !important;
   }
 
   strong { font-weight: 700; }

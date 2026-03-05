@@ -1,0 +1,78 @@
+import { useState, useRef, type ReactNode } from "react"
+import * as Dialog from "@radix-ui/react-dialog"
+import { X, Printer, Bug } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { printViaIframe } from "@/lib/print/printIframe"
+
+interface PrintPreviewProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: ReactNode
+}
+
+/**
+ * Modale d'aperçu avant impression.
+ * Affiche les pages A4 avec ombre dans un dialog scrollable.
+ * L'impression utilise un iframe caché pour contourner les limitations
+ * du Dialog Radix (position fixed, flex, overflow).
+ */
+export function PrintPreview({ open, onOpenChange, children }: PrintPreviewProps) {
+  const [debug, setDebug] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const handlePrint = () => {
+    if (scrollRef.current) {
+      printViaIframe(scrollRef.current)
+    }
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[95vw] h-[92vh] border bg-background shadow-lg rounded-lg flex flex-col overflow-hidden focus:outline-none"
+          style={{ maxWidth: "880px" }}
+          aria-describedby={undefined}
+        >
+          {/* Header */}
+          <div className="print-toolbar flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+            <Dialog.Title className="text-sm font-semibold">
+              Aperçu avant impression
+            </Dialog.Title>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={debug ? "default" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDebug((d) => !d)}
+                title="Mode debug — bordures des zones"
+              >
+                <Bug className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handlePrint}
+                title="Imprimer"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+              <Dialog.Close className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+                <X className="h-4 w-4" />
+              </Dialog.Close>
+            </div>
+          </div>
+
+          {/* Zone scrollable avec les pages A4 */}
+          <div ref={scrollRef} className={`print-preview-scroll flex-1 overflow-y-auto p-6 bg-muted/50 ${debug ? "a4-debug" : ""}`}>
+            <div className="flex flex-col items-center gap-6">
+              {children}
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}

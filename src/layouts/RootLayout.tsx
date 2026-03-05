@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar"
 import { SettingsDialog } from "@/features/settings/SettingsDialog"
 import { AppLogo } from "@/components/AppLogo"
 import { APP_NAME } from "@/lib/navigation"
+import { DndProvider } from "@/lib/dnd/DndProvider"
 
 /** Icône « restaurer » Windows : deux carrés superposés */
 function RestoreIcon({ className }: { className?: string }) {
@@ -120,15 +121,18 @@ export function RootLayout() {
 
       {/* Contenu : sidebar + page */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar desktop */}
-        <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
+        {/* DndProvider partagé entre sidebar desktop et contenu */}
+        <DndProvider>
+          {/* Sidebar desktop */}
+          <Sidebar onOpenSettings={() => setSettingsOpen(true)} />
 
-        {/* Sidebar mobile (drawer) */}
+          <main className="flex-1 overflow-auto">
+            <Outlet />
+          </main>
+        </DndProvider>
+
+        {/* Sidebar mobile (drawer) — hors du DndProvider, garde son propre DndContext */}
         <Sidebar mobile open={mobileOpen} onClose={() => setMobileOpen(false)} onOpenSettings={() => setSettingsOpen(true)} />
-
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />

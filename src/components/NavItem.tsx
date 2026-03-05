@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { NavItemData } from "@/lib/navigation"
+import { useDndRegistry } from "@/lib/dnd/useDndRegistry"
 
 interface NavItemProps {
   item: NavItemData
@@ -26,12 +27,18 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id })
+  } = useSortable({ id: item.id, data: { type: "chapter", chapterId: item.id } })
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   }
+
+  // Feedback visuel : highlight quand un document est survolé sur ce chapitre
+  const { activeDragType, activeOverId } = useDndRegistry()
+  const isItemOver =
+    (activeDragType === "document" || activeDragType === "tracking_sheet")
+    && activeOverId === item.id
 
   // Détecte si la sidebar desktop est rétractée (entre md et lg)
   const [isExpanded, setIsExpanded] = useState(() => window.matchMedia(LG_QUERY).matches)
@@ -54,7 +61,11 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
           style={style}
           {...attributes}
           {...listeners}
-          className={cn("touch-none", isDragging && "z-50 opacity-80")}
+          className={cn(
+            "touch-none rounded-lg",
+            isDragging && "z-50 opacity-80",
+            isItemOver && "ring-2 ring-primary bg-primary/10"
+          )}
         >
           <NavLink
             to={item.path}

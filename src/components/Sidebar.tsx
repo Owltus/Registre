@@ -25,6 +25,7 @@ import { getChapterIcon, type ChapterRow, type NavItemData } from "@/lib/navigat
 import { useQuery } from "@/lib/hooks/useQuery"
 import { useMutation } from "@/lib/hooks/useMutation"
 import { on, CHAPTERS_CHANGED } from "@/lib/events"
+import { useDndRegistry } from "@/lib/dnd/useDndRegistry"
 import { NavItem } from "./NavItem"
 import { IconPicker } from "./IconPicker"
 
@@ -177,8 +178,29 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
     )
   }
 
-  // Liste sortable des chapitres
-  const ChapterList = ({ responsive, onItemClick }: { responsive?: boolean; onItemClick?: () => void }) => (
+  // Liste sortable des chapitres — version desktop (utilise le DndContext du DndProvider)
+  const DesktopChapterList = ({ responsive }: { responsive?: boolean }) => {
+    const dndRegistry = useDndRegistry()
+
+    useEffect(() => {
+      dndRegistry.registerHandler("chapter", handleDragEnd)
+      return () => dndRegistry.unregisterHandler("chapter")
+    }, [dndRegistry])
+
+    return (
+      <SortableContext
+        items={navItems.map((item) => item.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {navItems.map((item) => (
+          <NavItem key={item.id} item={item} responsive={responsive} />
+        ))}
+      </SortableContext>
+    )
+  }
+
+  // Liste sortable des chapitres — version mobile (DndContext propre)
+  const MobileChapterList = ({ onItemClick }: { onItemClick?: () => void }) => (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
@@ -190,7 +212,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
         strategy={verticalListSortingStrategy}
       >
         {navItems.map((item) => (
-          <NavItem key={item.id} item={item} responsive={responsive} onClick={onItemClick} />
+          <NavItem key={item.id} item={item} onClick={onItemClick} />
         ))}
       </SortableContext>
     </DndContext>
@@ -293,7 +315,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
           </div>
 
           <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
-            <ChapterList onItemClick={onClose} />
+            <MobileChapterList onItemClick={onClose} />
           </nav>
 
           <div className="mt-auto border-t p-2 flex flex-col gap-1">
@@ -328,7 +350,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
         </div>
 
         <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
-          <ChapterList responsive />
+          <DesktopChapterList responsive />
         </nav>
 
         <div className="mt-auto border-t p-2 flex flex-col gap-1">

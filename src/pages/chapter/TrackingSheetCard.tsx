@@ -1,27 +1,25 @@
-import { useCallback } from "react"
-import { useNavigate } from "react-router-dom"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
-import { Trash2, FileDown, FileText, Pencil } from "lucide-react"
+import { Trash2, FileDown, Pencil, ClipboardList } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { Doc } from "./types"
-import type { DocumentDragData } from "@/lib/dnd/useDndRegistry"
+import type { TrackingSheet, Periodicite } from "./types"
+import type { TrackingSheetDragData } from "@/lib/dnd/useDndRegistry"
 
-interface DocumentCardProps {
-  doc: Doc
+interface TrackingSheetCardProps {
+  sheet: TrackingSheet
   chapterId: string
-  onExport: (e: React.MouseEvent, doc: Doc) => void
-  onDelete: (e: React.MouseEvent, doc: Doc) => void
+  periodicite?: Periodicite
+  onExport: (e: React.MouseEvent, sheet: TrackingSheet) => void
+  onEdit: (e: React.MouseEvent, sheet: TrackingSheet) => void
+  onDelete: (e: React.MouseEvent, sheet: TrackingSheet) => void
 }
 
-export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCardProps) {
-  const navigate = useNavigate()
-
-  const dragData: DocumentDragData = {
-    type: "document",
-    docId: doc.id,
-    docTitle: doc.title,
+export function TrackingSheetCard({ sheet, chapterId, periodicite, onExport, onEdit, onDelete }: TrackingSheetCardProps) {
+  const dragData: TrackingSheetDragData = {
+    type: "tracking_sheet",
+    sheetId: sheet.id,
+    sheetTitle: sheet.title,
     sourceChapterId: chapterId,
   }
 
@@ -33,7 +31,7 @@ export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCar
     transition,
     isDragging,
   } = useSortable({
-    id: `document-${doc.id}`,
+    id: `sheet-${sheet.id}`,
     data: dragData,
   })
 
@@ -42,10 +40,6 @@ export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCar
     transition,
   }
 
-  const handleClick = useCallback(() => {
-    navigate(`/chapitres/${chapterId}/documents/${doc.id}`)
-  }, [navigate, chapterId, doc.id])
-
   return (
     <div
       ref={setNodeRef}
@@ -53,20 +47,24 @@ export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCar
       {...attributes}
       {...listeners}
       className={cn(
-        "group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 cursor-pointer hover:border-primary/50 transition-colors touch-none",
+        "group flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:border-primary/50 touch-none cursor-pointer",
         isDragging && "opacity-30 z-50"
       )}
-      onClick={handleClick}
     >
-      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
       <h3 className="text-sm font-medium truncate flex-1">
-        {doc.title || "Sans titre"}
+        {sheet.title || "Sans titre"}
       </h3>
+      {periodicite && (
+        <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-accent-foreground shrink-0">
+          {periodicite.label}
+        </span>
+      )}
       <Button
         variant="ghost"
         size="icon"
         className="h-7 w-7 opacity-0 group-hover:opacity-100 shrink-0"
-        onClick={(e) => onExport(e, doc)}
+        onClick={(e) => onExport(e, sheet)}
         aria-label="Exporter PDF"
       >
         <FileDown className="h-3.5 w-3.5" />
@@ -75,10 +73,7 @@ export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCar
         variant="ghost"
         size="icon"
         className="h-7 w-7 opacity-0 group-hover:opacity-100 shrink-0"
-        onClick={(e) => {
-          e.stopPropagation()
-          navigate(`/chapitres/${chapterId}/documents/${doc.id}?edit=1`)
-        }}
+        onClick={(e) => onEdit(e, sheet)}
         aria-label="Modifier"
       >
         <Pencil className="h-3.5 w-3.5" />
@@ -87,7 +82,7 @@ export function DocumentCard({ doc, chapterId, onExport, onDelete }: DocumentCar
         variant="ghost"
         size="icon"
         className="h-7 w-7 opacity-0 group-hover:opacity-100 shrink-0"
-        onClick={(e) => onDelete(e, doc)}
+        onClick={(e) => onDelete(e, sheet)}
         aria-label="Supprimer"
       >
         <Trash2 className="h-3.5 w-3.5" />

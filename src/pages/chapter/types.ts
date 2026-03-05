@@ -5,9 +5,30 @@ export interface Doc {
   title: string
   content: string
   chapter_id: string
+  sort_order: number
   created_at: string
   updated_at: string
 }
+
+export interface Periodicite {
+  id: number
+  label: string
+  nombre: number
+}
+
+export interface TrackingSheet {
+  id: number
+  title: string
+  chapter_id: string
+  periodicite_id: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type ChapterItem =
+  | { kind: "document"; data: Doc }
+  | { kind: "tracking_sheet"; data: TrackingSheet }
 
 /** Calcule le statut d'un chapitre selon le nombre de documents */
 export function computeStatus(docCount: number): ChapterStatus {

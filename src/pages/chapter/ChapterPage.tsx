@@ -1,19 +1,27 @@
-/* eslint-disable react-hooks/static-components */
-import { useState, useRef, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import type { DragEndEvent } from "@dnd-kit/core"
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
 import { useQuery } from "@/lib/hooks/useQuery"
 import { useMutation } from "@/lib/hooks/useMutation"
-import { exportToPdf } from "@/lib/export-pdf"
 import type { ChapterRow } from "@/lib/navigation"
 import { getChapterIcon } from "@/lib/navigation"
+import { useDndRegistry, type DocumentDragData, type TrackingSheetDragData } from "@/lib/dnd/useDndRegistry"
+import { PrintPreview } from "@/components/print/PrintPreview"
+import { DocumentPages } from "@/components/print/DocumentPages"
+import { TrackingSheetPage } from "@/components/print/TrackingSheetPage"
 import { Button } from "@/components/ui/button"
-import { Plus, FileText, Pencil } from "lucide-react"
-import type { Doc } from "./types"
+import { Plus, FileText, Pencil, Printer } from "lucide-react"
+import type { Doc, TrackingSheet, Periodicite, ChapterItem } from "./types"
 import { DocumentCard } from "./DocumentCard"
-import { CreateDocumentDialog } from "./CreateDocumentDialog"
+import { TrackingSheetCard } from "./TrackingSheetCard"
+import { CreateItemDialog } from "./CreateItemDialog"
 import { DeleteDocumentDialog } from "./DeleteDocumentDialog"
+import { DeleteTrackingSheetDialog } from "./DeleteTrackingSheetDialog"
+import { EditTrackingSheetDialog } from "./EditTrackingSheetDialog"
 import { EditChapterDialog } from "./EditChapterDialog"
 import { useDropZone, DropOverlay } from "./DropZone"
 import { emit, CHAPTERS_CHANGED } from "@/lib/events"
@@ -29,44 +37,201 @@ export default function ChapterPage() {
 
   const filters = useMemo(() => ({ chapter_id: String(chapterId ?? "") }), [chapterId])
   const { data: docs, loading, refetch } = useQuery<Doc>("documents", filters)
-  const { insert, remove } = useMutation("documents")
+  const { insert, update: updateDoc, remove } = useMutation("documents")
   const { update: updateChapter, remove: removeChapter } = useMutation("chapters")
+
+  // Feuilles de suivi
+  const { data: trackingSheets, loading: tsLoading, refetch: tsRefetch } = useQuery<TrackingSheet>("tracking_sheets", filters)
+  const { insert: insertTs, update: updateTs, remove: removeTs } = useMutation("tracking_sheets")
+  const { data: periodicites } = useQuery<Periodicite>("periodicites")
+
+  // Liste unifiée triée par sort_order
+  const allItems: ChapterItem[] = useMemo(() => {
+    const items: ChapterItem[] = [
+      ...docs.map(d => ({ kind: "document" as const, data: d })),
+      ...trackingSheets.map(s => ({ kind: "tracking_sheet" as const, data: s })),
+    ]
+    return items.sort((a, b) => a.data.sort_order - b.data.sort_order)
+  }, [docs, trackingSheets])
+
+  // État local optimiste pour le réordonnancement
+  const [localItems, setLocalItems] = useState<ChapterItem[]>([])
+  useEffect(() => { setLocalItems(allItems) }, [allItems])
+
+  // IDs pour le SortableContext (préfixés selon le type)
+  const sortableIds = useMemo(
+    () => localItems.map((item) =>
+      item.kind === "document" ? `document-${item.data.id}` : `sheet-${item.data.id}`
+    ),
+    [localItems]
+  )
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editChapterOpen, setEditChapterOpen] = useState(false)
   const [deleteDoc, setDeleteDoc] = useState<Doc | null>(null)
-  const [pdfDoc, setPdfDoc] = useState<Doc | null>(null)
-  const pdfRef = useRef<HTMLDivElement>(null)
 
-  // Drag-and-drop
+  // Aperçu avant impression
+  type PrintPreviewState =
+    | { type: "document"; doc: Doc }
+    | { type: "tracking_sheet"; sheet: TrackingSheet; periodiciteLabel: string; nombre: number }
+    | { type: "all" }
+    | null
+  const [printPreview, setPrintPreview] = useState<PrintPreviewState>(null)
+
+  // États feuilles de suivi
+  const [editSheet, setEditSheet] = useState<TrackingSheet | null>(null)
+  const [deleteSheet, setDeleteSheet] = useState<TrackingSheet | null>(null)
+
+  // Drag-and-drop fichiers (import)
   const handleImport = useCallback(async (files: { title: string; content: string }[]) => {
-    for (const { title, content } of files) {
-      await insert({ title, content, chapter_id: chapterId ?? "" })
+    const nextOrder = localItems.length > 0
+      ? Math.max(...localItems.map((item) => item.data.sort_order)) + 1
+      : 1
+    for (let i = 0; i < files.length; i++) {
+      const { title, content } = files[i]
+      await insert({ title, content, chapter_id: chapterId ?? "", sort_order: nextOrder + i })
     }
     refetch()
-  }, [insert, chapterId, refetch])
+  }, [insert, chapterId, refetch, localItems])
 
   const { isDragOver, dragProps } = useDropZone(handleImport)
 
-  // Export PDF
+  // Drag-and-drop unifié : réordonnancement OU déplacement vers un autre chapitre
+  const dndRegistry = useDndRegistry()
+
+  const handleItemDrop = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+
+      const data = active.data.current as (DocumentDragData | TrackingSheetDragData) | undefined
+      if (!data) return
+
+      const overData = over.data.current as { type?: string; chapterId?: string } | undefined
+
+      // Cas 1 : drop sur un chapitre de la sidebar → déplacer l'item
+      if (overData?.type === "chapter") {
+        const targetChapterId = overData.chapterId ?? String(over.id)
+        const sourceChapterId = data.type === "document" ? data.sourceChapterId : data.sourceChapterId
+        if (targetChapterId === sourceChapterId) return
+
+        if (data.type === "document") {
+          await updateDoc(String(data.docId), { chapter_id: targetChapterId })
+          refetch()
+        } else {
+          await updateTs(String(data.sheetId), { chapter_id: targetChapterId })
+          tsRefetch()
+        }
+        return
+      }
+
+      // Cas 2 : drop sur un autre item → réordonner
+      const overType = overData?.type
+      if (overType === "document" || overType === "tracking_sheet") {
+        const activeId = String(active.id)
+        const overId = String(over.id)
+        const oldIndex = localItems.findIndex((item) =>
+          (item.kind === "document" ? `document-${item.data.id}` : `sheet-${item.data.id}`) === activeId
+        )
+        const newIndex = localItems.findIndex((item) =>
+          (item.kind === "document" ? `document-${item.data.id}` : `sheet-${item.data.id}`) === overId
+        )
+        if (oldIndex === -1 || newIndex === -1) return
+
+        // Mise à jour optimiste
+        const reordered = [...localItems]
+        const [moved] = reordered.splice(oldIndex, 1)
+        reordered.splice(newIndex, 0, moved)
+        setLocalItems(reordered)
+
+        // Persister en DB — mettre à jour le sort_order de chaque item
+        await Promise.all(
+          reordered.map((item, i) => {
+            if (item.kind === "document") {
+              return updateDoc(String(item.data.id), { sort_order: i + 1 })
+            } else {
+              return updateTs(String(item.data.id), { sort_order: i + 1 })
+            }
+          })
+        )
+        refetch()
+        tsRefetch()
+      }
+    },
+    [localItems, updateDoc, updateTs, refetch, tsRefetch]
+  )
+
+  useEffect(() => {
+    dndRegistry.registerHandler("document", handleItemDrop)
+    dndRegistry.registerHandler("tracking_sheet", handleItemDrop)
+    return () => {
+      dndRegistry.unregisterHandler("document")
+      dndRegistry.unregisterHandler("tracking_sheet")
+    }
+  }, [dndRegistry, handleItemDrop])
+
+  // Export PDF — ouvre l'aperçu avant impression
   const handleExport = useCallback((e: React.MouseEvent, doc: Doc) => {
     e.stopPropagation()
-    setPdfDoc(doc)
+    setPrintPreview({ type: "document", doc })
   }, [])
 
-  const handlePdfRendered = useCallback(() => {
-    if (!pdfDoc || !pdfRef.current) return
-    const html = pdfRef.current.innerHTML
-    exportToPdf(pdfDoc.title || "Sans titre", html)
-    setPdfDoc(null)
-  }, [pdfDoc])
-
-  // Création
+  // Création document
   const handleCreate = useCallback(async (title: string) => {
-    await insert({ title, content: "", chapter_id: chapterId ?? "" })
+    const nextOrder = localItems.length > 0
+      ? Math.max(...localItems.map((item) => item.data.sort_order)) + 1
+      : 1
+    await insert({ title, content: "", chapter_id: chapterId ?? "", sort_order: nextOrder })
     refetch()
     setCreateOpen(false)
-  }, [insert, chapterId, refetch])
+  }, [insert, chapterId, refetch, localItems])
+
+  // Création feuille de suivi
+  const handleCreateTrackingSheet = useCallback(async (title: string, periodiciteId: number) => {
+    const nextOrder = localItems.length > 0
+      ? Math.max(...localItems.map((item) => item.data.sort_order)) + 1
+      : 1
+    await insertTs({ title, chapter_id: chapterId ?? "", periodicite_id: periodiciteId, sort_order: nextOrder })
+    tsRefetch()
+    setCreateOpen(false)
+  }, [insertTs, chapterId, tsRefetch, localItems])
+
+  // Export PDF feuille de suivi — ouvre l'aperçu avant impression
+  const handleTsExport = useCallback((e: React.MouseEvent, sheet: TrackingSheet) => {
+    e.stopPropagation()
+    const perio = periodicites.find((p) => p.id === sheet.periodicite_id)
+    setPrintPreview({
+      type: "tracking_sheet",
+      sheet,
+      periodiciteLabel: perio?.label ?? "",
+      nombre: perio?.nombre ?? 8,
+    })
+  }, [periodicites])
+
+  // Édition feuille de suivi
+  const handleTsEditClick = useCallback((e: React.MouseEvent, sheet: TrackingSheet) => {
+    e.stopPropagation()
+    setEditSheet(sheet)
+  }, [])
+
+  const handleTsEditSave = useCallback(async (id: number, title: string, periodiciteId: number) => {
+    await updateTs(String(id), { title, periodicite_id: periodiciteId })
+    tsRefetch()
+    setEditSheet(null)
+  }, [updateTs, tsRefetch])
+
+  // Suppression feuille de suivi
+  const handleTsDeleteClick = useCallback((e: React.MouseEvent, sheet: TrackingSheet) => {
+    e.stopPropagation()
+    setDeleteSheet(sheet)
+  }, [])
+
+  const handleTsDeleteConfirm = useCallback(async () => {
+    if (!deleteSheet) return
+    await removeTs(String(deleteSheet.id))
+    tsRefetch()
+    setDeleteSheet(null)
+  }, [deleteSheet, removeTs, tsRefetch])
 
   // Édition du chapitre
   const handleChapterSave = useCallback(async (label: string, description: string) => {
@@ -135,70 +300,126 @@ export default function ChapterPage() {
           )}
         </div>
 
-        <Button variant="outline" size="sm" onClick={() => setEditChapterOpen(true)}>
-          <Pencil className="h-4 w-4 mr-1.5" />
-          Édition
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPrintPreview({ type: "all" })} aria-label="Tout imprimer" title="Tout imprimer">
+          <Printer className="h-4 w-4" />
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Nouveau
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditChapterOpen(true)} aria-label="Édition">
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCreateOpen(true)} aria-label="Nouveau">
+          <Plus className="h-4 w-4" />
         </Button>
       </div>
 
       {/* Corps */}
-      <div className="flex-1 overflow-y-auto p-6">
-       <div className="mx-auto" style={{ maxWidth: "210mm" }}>
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col">
+       <div className="mx-auto flex-1 flex flex-col w-full" style={{ maxWidth: "210mm" }}>
 
         {/* Zone de drop — prend tout l'espace restant */}
         <div className="relative flex-1 rounded-lg flex flex-col">
           {isDragOver && <DropOverlay />}
 
-          {loading ? (
+          {loading || tsLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
             </div>
-          ) : docs.length === 0 ? (
+          ) : localItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 h-full text-center text-muted-foreground">
               <FileText className="h-10 w-10 mb-3 opacity-50" />
-              <p className="font-medium">Aucun document</p>
+              <p className="font-medium">Aucun élément</p>
               <p className="text-sm mt-1">Cliquez sur Nouveau pour en créer un</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {docs.map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  doc={doc}
-                  chapterId={chapterId!}
-                  onExport={handleExport}
-                  onDelete={handleDeleteClick}
-                />
-              ))}
-            </div>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-2">
+                {localItems.map((item) =>
+                  item.kind === "document" ? (
+                    <DocumentCard
+                      key={`doc-${item.data.id}`}
+                      doc={item.data}
+                      chapterId={chapterId!}
+                      onExport={handleExport}
+                      onDelete={handleDeleteClick}
+                    />
+                  ) : (
+                    <TrackingSheetCard
+                      key={`sheet-${item.data.id}`}
+                      sheet={item.data}
+                      chapterId={chapterId!}
+                      periodicite={periodicites.find((p) => p.id === (item.data as TrackingSheet).periodicite_id)}
+                      onExport={handleTsExport}
+                      onEdit={handleTsEditClick}
+                      onDelete={handleTsDeleteClick}
+                    />
+                  )
+                )}
+              </div>
+            </SortableContext>
           )}
         </div>
        </div>
       </div>
 
-      {/* Rendu off-screen pour export PDF */}
-      {pdfDoc && (
-        <div className="fixed -left-[9999px] top-0" aria-hidden>
-          <div ref={(el) => { pdfRef.current = el; if (el) handlePdfRendered() }} className="prose max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{pdfDoc.content}</ReactMarkdown>
-          </div>
-        </div>
-      )}
+      {/* Aperçu avant impression */}
+      <PrintPreview open={printPreview !== null} onOpenChange={(open) => { if (!open) setPrintPreview(null) }}>
+        {printPreview?.type === "document" && (
+          <DocumentPages
+            title={printPreview.doc.title || "Sans titre"}
+            content={printPreview.doc.content}
+            chapterName={chapter?.label}
+          />
+        )}
+        {printPreview?.type === "tracking_sheet" && (
+          <TrackingSheetPage
+            title={printPreview.sheet.title || "Sans titre"}
+            periodiciteLabel={printPreview.periodiciteLabel}
+            nombre={printPreview.nombre}
+            chapterName={chapter?.label}
+          />
+        )}
+        {printPreview?.type === "all" && localItems.map((item) =>
+          item.kind === "document" ? (
+            <DocumentPages
+              key={`doc-${item.data.id}`}
+              title={item.data.title || "Sans titre"}
+              content={item.data.content}
+              chapterName={chapter?.label}
+            />
+          ) : (
+            <TrackingSheetPage
+              key={`sheet-${item.data.id}`}
+              title={item.data.title || "Sans titre"}
+              periodiciteLabel={periodicites.find((p) => p.id === (item.data as TrackingSheet).periodicite_id)?.label ?? ""}
+              nombre={periodicites.find((p) => p.id === (item.data as TrackingSheet).periodicite_id)?.nombre ?? 8}
+              chapterName={chapter?.label}
+            />
+          )
+        )}
+      </PrintPreview>
 
-      <CreateDocumentDialog
+      <CreateItemDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreate={handleCreate}
+        onCreateDocument={handleCreate}
+        onCreateTrackingSheet={handleCreateTrackingSheet}
       />
 
       <DeleteDocumentDialog
         doc={deleteDoc}
         onClose={() => setDeleteDoc(null)}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <EditTrackingSheetDialog
+        sheet={editSheet}
+        onClose={() => setEditSheet(null)}
+        onSave={handleTsEditSave}
+      />
+
+      <DeleteTrackingSheetDialog
+        sheet={deleteSheet}
+        onClose={() => setDeleteSheet(null)}
+        onConfirm={handleTsDeleteConfirm}
       />
 
       <EditChapterDialog

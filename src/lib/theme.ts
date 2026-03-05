@@ -30,9 +30,21 @@ export function initTheme() {
   applyTheme(resolved)
 
   // Écouter les changements de préférence OS
+  // Ignorer les changements déclenchés par window.print() (passage en media print)
+  let printing = false
+  window.addEventListener("beforeprint", () => { printing = true })
+  window.addEventListener("afterprint", () => {
+    printing = false
+    // Restaurer le thème correct après l'impression
+    if (getStoredTheme() === "system") {
+      applyTheme(getSystemTheme())
+    }
+  })
+
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => {
+      if (printing) return
       if (getStoredTheme() === "system") {
         applyTheme(getSystemTheme())
       }

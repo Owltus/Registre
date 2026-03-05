@@ -12,11 +12,42 @@ CREATE TABLE IF NOT EXISTS documents (
     title      TEXT    NOT NULL,
     content    TEXT    NOT NULL DEFAULT '',
     chapter_id TEXT    NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT    DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT    DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_chapter ON documents(chapter_id);
+
+-- Périodicités de suivi
+CREATE TABLE IF NOT EXISTS periodicites (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    label  TEXT    NOT NULL,
+    nombre INTEGER NOT NULL DEFAULT 8
+);
+
+INSERT INTO periodicites (label, nombre) VALUES
+    ('Mensuel', 8),
+    ('Sesquimestriel', 8),
+    ('Semestriel', 8),
+    ('Annuel', 8),
+    ('Biennale', 8),
+    ('Triennal', 4),
+    ('Quinquennal', 4),
+    ('Non défini', 8);
+
+-- Feuilles de suivi
+CREATE TABLE IF NOT EXISTS tracking_sheets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    title           TEXT    NOT NULL,
+    chapter_id      TEXT    NOT NULL DEFAULT '',
+    periodicite_id  INTEGER NOT NULL,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT    DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TEXT    DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (periodicite_id) REFERENCES periodicites(id)
+);
+CREATE INDEX IF NOT EXISTS idx_tracking_sheets_chapter ON tracking_sheets(chapter_id);
 
 -- Chapitres du registre ERP
 CREATE TABLE IF NOT EXISTS chapters (

@@ -135,7 +135,7 @@ import {
 } from "lucide-react"
 
 /** Nom par défaut du classeur — modifiable par l'utilisateur via les préférences */
-export const DEFAULT_REGISTRY_NAME = "Registre de Sécurité"
+export const DEFAULT_REGISTRY_NAME = "Mon classeur"
 
 /** Item de navigation générique — utilisé par le composant NavItem */
 export interface NavItemData {

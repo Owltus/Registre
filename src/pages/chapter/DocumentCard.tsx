@@ -18,10 +18,11 @@ interface DocumentCardProps {
   classeurName?: string
   establishment?: string
   onExport: (e: React.MouseEvent, doc: Doc) => void
+  onEdit: (e: React.MouseEvent, doc: Doc) => void
   onDelete: (e: React.MouseEvent, doc: Doc) => void
 }
 
-export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeurName, establishment, onExport, onDelete }: DocumentCardProps) {
+export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeurName, establishment, onExport, onEdit, onDelete }: DocumentCardProps) {
   const navigate = useNavigate()
 
   const dragData: DocumentDragData = {
@@ -77,6 +78,7 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
         <A4Preview>
           <DocumentPages
             title={doc.title || "Sans titre"}
+            subtitle={doc.description ?? ""}
             content={doc.content}
             chapterName={chapterName}
             classeurName={classeurName}
@@ -91,7 +93,7 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => onExport(e, doc)} aria-label="Exporter PDF">
               <FileDown className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); navigate(classeurId ? `/classeurs/${classeurId}/chapitres/${chapterId}/documents/${doc.id}?edit=1` : `/chapitres/${chapterId}/documents/${doc.id}?edit=1`) }} aria-label="Modifier">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => onEdit(e, doc)} aria-label="Modifier">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => onDelete(e, doc)} aria-label="Supprimer">

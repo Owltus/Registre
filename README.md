@@ -1,26 +1,28 @@
-# Registre de Securite ERP
+# Registre
 
-Application de bureau pour gerer le **registre de securite** des etablissements recevant du public (ERP).
+Application de bureau pour créer et gérer des **classeurs structurés** prêts à imprimer : registres de sécurité, carnets sanitaires, ou tout autre document organisé par chapitres avec une trame fixe.
 
-Elle centralise tous les documents obligatoires en un seul endroit : verifications techniques, moyens de secours, formations, travaux, consignes, commissions de securite, etc.
+Chaque classeur contient des chapitres, et chaque chapitre peut contenir des documents (Markdown), des feuilles de suivi périodique et des feuilles de signature — le tout exportable en PDF pour être classé dans un support physique.
 
-## Fonctionnalites
+## Fonctionnalités
 
-- 8 chapitres reglementaires pre-configures, personnalisables
-- Creation et edition de documents en Markdown
-- Import de fichiers `.md` par glisser-deposer
-- Export PDF
-- Theme clair / sombre
-- Donnees stockees localement (SQLite)
+- Multi-classeurs avec icône, nom et établissement personnalisables
+- Chapitres personnalisables avec drag & drop
+- Documents en Markdown (avec support Mermaid et KaTeX)
+- Feuilles de suivi périodique et feuilles de signature
+- Import de fichiers `.md` par glisser-déposer
+- Export PDF (unitaire, par chapitre ou classeur complet avec sommaire)
+- Thème clair / sombre
+- Données stockées localement (SQLite)
 
 ## Installation
 
-### Pre-requis
+### Pré-requis
 
 - [Node.js](https://nodejs.org/) >= 18
 - [pnpm](https://pnpm.io/)
 - [Rust](https://www.rust-lang.org/tools/install) (stable)
-- Pre-requis Tauri v2 : voir [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)
+- Pré-requis Tauri v2 : voir [tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 ### Lancer le projet
 

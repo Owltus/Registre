@@ -3,6 +3,7 @@ import type { ChapterStatus } from "@/lib/navigation"
 export interface Doc {
   id: number
   title: string
+  description: string
   content: string
   chapter_id: string
   sort_order: number
@@ -29,6 +30,7 @@ export interface TrackingSheet {
 export interface SignatureSheet {
   id: number
   title: string
+  description: string
   chapter_id: string
   nombre: number
   sort_order: number

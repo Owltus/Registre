@@ -37,21 +37,6 @@ export default function ClasseurListPage() {
 
   const sortedClasseurs = [...classeurs].sort((a, b) => a.sort_order - b.sort_order)
 
-  // Compteurs de chapitres par classeur
-  const [chapterCounts, setChapterCounts] = useState<Record<number, number>>({})
-  useEffect(() => {
-    if (classeurs.length === 0) return
-    sqliteAdapter
-      .query<{ classeur_id: number; count: number }>(
-        "SELECT classeur_id, COUNT(*) as count FROM chapters GROUP BY classeur_id"
-      )
-      .then((rows) => {
-        const map: Record<number, number> = {}
-        for (const r of rows) map[r.classeur_id] = r.count
-        setChapterCounts(map)
-      })
-  }, [classeurs])
-
   // Dialog de création
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState("")
@@ -111,47 +96,54 @@ export default function ClasseurListPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 p-2 border-b border-border">
-        <div className="flex-1" />
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCreateOpen(true)} aria-label="Nouveau classeur" title="Nouveau classeur">
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
       {/* Corps */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+      <div className="flex-1 overflow-y-auto flex items-center justify-center p-6">
+        <div className="flex flex-col gap-3 max-w-md w-full">
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-4 rounded-lg border border-dashed bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-accent-foreground shrink-0">
+              <Plus className="h-5 w-5" />
+            </div>
+            <span className="text-sm font-medium text-muted-foreground">Nouveau classeur</span>
+          </button>
+
+          {sortedClasseurs.length > 0 && <div className="border-b border-border" />}
           {sortedClasseurs.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center mt-12">
+            <p className="text-sm text-muted-foreground text-center">
               Aucun classeur. Créez-en un pour commencer.
             </p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedClasseurs.map((cl) => {
-                const Icon = getChapterIcon(cl.icon)
-                return (
-                  <button
-                    key={cl.id}
-                    onClick={() => navigate(`/classeurs/${cl.id}`)}
-                    className="group relative flex flex-col items-center gap-3 rounded-lg border bg-card p-6 hover:bg-accent transition-colors text-left"
+            sortedClasseurs.map((cl) => {
+              const Icon = getChapterIcon(cl.icon)
+              const subtitle = [cl.etablissement, cl.etablissement_complement].filter(Boolean).join(" · ")
+              return (
+                <button
+                  key={cl.id}
+                  onClick={() => navigate(`/classeurs/${cl.id}`)}
+                  className="group flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-accent-foreground shrink-0">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <span className="text-sm font-semibold truncate">{cl.name}</span>
+                    {subtitle && (
+                      <span className="text-xs text-muted-foreground truncate">{subtitle}</span>
+                    )}
+                  </div>
+                  <div
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(cl) }}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    aria-label="Supprimer"
                   >
-                    <Icon className="h-8 w-8 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-center">{cl.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {chapterCounts[cl.id] ?? 0} chapitre{(chapterCounts[cl.id] ?? 0) > 1 ? "s" : ""}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(cl) }}
-                      className="absolute top-2 right-2 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Supprimer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </button>
-                )
-              })}
-            </div>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
       </div>

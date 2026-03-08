@@ -15,7 +15,7 @@ impl AppState {
     pub fn new(db_url: String) -> Self {
         Self {
             config: Mutex::new(AppConfig {
-                app_name: "Registre de Sécurité".to_string(),
+                app_name: "Registre".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             }),
             db_url,

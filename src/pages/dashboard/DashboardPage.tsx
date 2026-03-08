@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, Fragment } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import * as Dialog from "@radix-ui/react-dialog"
-import { Pencil, BookOpen, FileText, ClipboardList, PenLine, X, Plus, Printer, List } from "lucide-react"
+import { Pencil, X, Plus, Printer, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DEFAULT_REGISTRY_NAME, getChapterIcon, buildEstablishment, type ChapterRow, type ClasseurRow } from "@/lib/navigation"
+import { DEFAULT_REGISTRY_NAME, buildEstablishment, getChapterIcon, type ChapterRow, type ClasseurRow } from "@/lib/navigation"
 import { useQuery } from "@/lib/hooks/useQuery"
 import { useMutation } from "@/lib/hooks/useMutation"
 import { sqliteAdapter } from "@/lib/db/sqlite"
@@ -18,10 +18,6 @@ import { DocumentPages } from "@/components/print/DocumentPages"
 import { TrackingSheetPage } from "@/components/print/TrackingSheetPage"
 import { SignatureSheetPage } from "@/components/print/SignatureSheetPage"
 import type { Doc, TrackingSheet, SignatureSheet, Periodicite } from "@/pages/chapter/types"
-
-interface CountRow {
-  count: number
-}
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -78,69 +74,30 @@ export default function DashboardPage() {
 
   const sortedChapters = [...chapters].sort((a, b) => a.sort_order - b.sort_order)
 
-  // Compteurs filtrés par classeur
-  const [docCount, setDocCount] = useState(0)
-  const [trackingCount, setTrackingCount] = useState(0)
-  const [signatureCount, setSignatureCount] = useState(0)
-
-  useEffect(() => {
-    const fetchCounts = async () => {
-      const subquery = "SELECT id FROM chapters WHERE classeur_id = $1"
-      const [docs] = await sqliteAdapter.query<CountRow>(
-        `SELECT COUNT(*) as count FROM documents WHERE chapter_id IN (${subquery})`,
-        [Number(classeurId)]
-      )
-      const [sheets] = await sqliteAdapter.query<CountRow>(
-        `SELECT COUNT(*) as count FROM tracking_sheets WHERE chapter_id IN (${subquery})`,
-        [Number(classeurId)]
-      )
-      const [sigs] = await sqliteAdapter.query<CountRow>(
-        `SELECT COUNT(*) as count FROM signature_sheets WHERE chapter_id IN (${subquery})`,
-        [Number(classeurId)]
-      )
-      setDocCount(docs?.count ?? 0)
-      setTrackingCount(sheets?.count ?? 0)
-      setSignatureCount(sigs?.count ?? 0)
-    }
-    fetchCounts()
-  }, [chapters, classeurId])
-
-  // Données pour l'impression globale
+  // Données pour le sommaire et l'impression
   const [printOpen, setPrintOpen] = useState(false)
+  const [tocOpen, setTocOpen] = useState(false)
   const [allDocs, setAllDocs] = useState<Doc[]>([])
   const [allTrackingSheets, setAllTrackingSheets] = useState<TrackingSheet[]>([])
   const [allSignatureSheets, setAllSignatureSheets] = useState<SignatureSheet[]>([])
   const [periodicites, setPeriodicites] = useState<Periodicite[]>([])
 
-  const handlePrintAll = async () => {
+  // Charger les contenus au montage pour le sommaire
+  useEffect(() => {
+    if (chapters.length === 0) return
     const subquery = "SELECT id FROM chapters WHERE classeur_id = $1"
-    const [docs, sheets, sigs, perios] = await Promise.all([
+    Promise.all([
       sqliteAdapter.query<Doc>(`SELECT * FROM documents WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
       sqliteAdapter.query<TrackingSheet>(`SELECT * FROM tracking_sheets WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
       sqliteAdapter.query<SignatureSheet>(`SELECT * FROM signature_sheets WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
       sqliteAdapter.query<Periodicite>("SELECT * FROM periodicites"),
-    ])
-    setAllDocs(docs)
-    setAllTrackingSheets(sheets)
-    setAllSignatureSheets(sigs)
-    setPeriodicites(perios)
-    setPrintOpen(true)
-  }
-
-  const [tocOpen, setTocOpen] = useState(false)
-
-  const handlePrintToc = async () => {
-    const subquery = "SELECT id FROM chapters WHERE classeur_id = $1"
-    const [docs, sheets, sigs] = await Promise.all([
-      sqliteAdapter.query<Doc>(`SELECT * FROM documents WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
-      sqliteAdapter.query<TrackingSheet>(`SELECT * FROM tracking_sheets WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
-      sqliteAdapter.query<SignatureSheet>(`SELECT * FROM signature_sheets WHERE chapter_id IN (${subquery}) ORDER BY sort_order`, [Number(classeurId)]),
-    ])
-    setAllDocs(docs)
-    setAllTrackingSheets(sheets)
-    setAllSignatureSheets(sigs)
-    setTocOpen(true)
-  }
+    ]).then(([docs, sheets, sigs, perios]) => {
+      setAllDocs(docs)
+      setAllTrackingSheets(sheets)
+      setAllSignatureSheets(sigs)
+      setPeriodicites(perios)
+    })
+  }, [chapters, classeurId])
 
   const openEditDialog = () => {
     setEditValue(classeurName)
@@ -164,101 +121,107 @@ export default function DashboardPage() {
     setEditOpen(false)
   }
 
-  const stats = [
-    { label: "Chapitres", value: chapters.length, icon: BookOpen },
-    { label: "Documents", value: docCount, icon: FileText },
-    { label: "Fiches de suivi", value: trackingCount, icon: ClipboardList },
-    { label: "Fiches de signature", value: signatureCount, icon: PenLine },
-  ]
+  // Construire les entrées du sommaire
+  const tocEntries = sortedChapters.map((ch, i) => {
+    const chDocs = allDocs.filter((d) => String(d.chapter_id) === String(ch.id))
+    const chSheets = allTrackingSheets.filter((s) => String(s.chapter_id) === String(ch.id))
+    const chSigs = allSignatureSheets.filter((s) => String(s.chapter_id) === String(ch.id))
+    return {
+      chapter: ch,
+      number: i + 1,
+      items: [
+        ...chDocs.map((d) => d.title || "Sans titre"),
+        ...chSheets.map((s) => s.title || "Sans titre"),
+        ...chSigs.map((s) => s.title || "Sans titre"),
+      ],
+    }
+  })
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 p-2 border-b border-border">
-        <div className="flex-1" />
-
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={handlePrintToc} aria-label="Imprimer le sommaire" title="Imprimer le sommaire">
-          <List className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={handlePrintAll} aria-label="Tout imprimer" title="Tout imprimer">
-          <Printer className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={openEditDialog} aria-label="Modifier le classeur" title="Modifier le classeur">
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCreateOpen(true)} aria-label="Nouveau chapitre" title="Nouveau chapitre">
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
       {/* Corps */}
-      <div className="flex-1 overflow-y-auto p-6">
-       <div className="mx-auto max-w-3xl">
-
-      {/* Grille de statistiques */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div
-              key={stat.label}
-              className="rounded-lg border bg-card p-4 flex flex-col items-center gap-2"
-            >
-              <Icon className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{stat.value}</span>
-              <span className="text-xs text-muted-foreground">{stat.label}</span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Liste des chapitres */}
-      <h2 className="text-lg font-semibold mb-4">Chapitres</h2>
-      {sortedChapters.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Aucun chapitre pour l'instant. Créez-en un depuis la sidebar.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {sortedChapters.map((ch) => {
-            const Icon = getChapterIcon(ch.icon)
+      <div className="flex-1 overflow-y-auto flex items-center justify-center p-6">
+        <div className="flex flex-col gap-6 max-w-md w-full">
+          {/* Carte d'identité */}
+          {classeur && (() => {
+            const ClasseurIcon = getChapterIcon(classeur.icon)
             return (
-              <Link
-                key={ch.id}
-                to={`/classeurs/${classeurId}/chapitres/${ch.id}`}
-                className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:bg-accent transition-colors"
-              >
-                <Icon className="h-5 w-5 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium">{ch.label}</span>
-              </Link>
+              <div className="rounded-lg border bg-card px-5 py-5">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-accent-foreground shrink-0">
+                    <ClasseurIcon className="h-6 w-6" />
+                  </div>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-base font-semibold truncate">{classeur.name}</span>
+                    {classeur.etablissement && (
+                      <span className="text-sm text-muted-foreground truncate">{classeur.etablissement}</span>
+                    )}
+                    {classeur.etablissement_complement && (
+                      <span className="text-xs text-muted-foreground/70 truncate">{classeur.etablissement_complement}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
             )
-          })}
-        </div>
-      )}
+          })()}
 
-       </div>
+          {/* Actions */}
+          <div className="flex flex-col gap-3">
+          <button
+            onClick={openEditDialog}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <Pencil className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Paramètres du classeur</span>
+              <span className="text-xs text-muted-foreground">Modifier le nom, l'icône et les informations de l'établissement</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Ajouter un chapitre</span>
+              <span className="text-xs text-muted-foreground">Créer un nouveau chapitre dans ce classeur</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setTocOpen(true)}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <List className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Exporter le sommaire</span>
+              <span className="text-xs text-muted-foreground">Générer un PDF avec la table des matières du classeur</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setPrintOpen(true)}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <Printer className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Exporter le classeur complet</span>
+              <span className="text-xs text-muted-foreground">Générer un PDF avec l'ensemble des chapitres et documents</span>
+            </div>
+          </button>
+          </div>
+        </div>
       </div>
 
       {/* Aperçu avant impression — tout le classeur */}
       <PrintPreview open={printOpen} onOpenChange={setPrintOpen}>
-        <ClasseurCoverPage classeurName={classeurName} />
+        <ClasseurCoverPage
+          classeurName={classeurName}
+          classeurIcon={classeur?.icon}
+          etablissement={classeur?.etablissement}
+          etablissementComplement={classeur?.etablissement_complement}
+        />
         <TableOfContentsPage
           classeurName={classeurName}
-          chapters={sortedChapters.map((ch, i) => {
-            const chDocs = allDocs.filter((d) => String(d.chapter_id) === String(ch.id))
-            const chSheets = allTrackingSheets.filter((s) => String(s.chapter_id) === String(ch.id))
-            const chSigs = allSignatureSheets.filter((s) => String(s.chapter_id) === String(ch.id))
-            return {
-              number: i + 1,
-              label: ch.label,
-              icon: ch.icon,
-              items: [
-                ...chDocs.map((d) => d.title || "Sans titre"),
-                ...chSheets.map((s) => s.title || "Sans titre"),
-                ...chSigs.map((s) => s.title || "Sans titre"),
-              ],
-            }
-          })}
+          chapters={tocEntries.map((e) => ({ number: e.number, label: e.chapter.label, icon: e.chapter.icon, items: e.items }))}
         />
         {sortedChapters.map((ch) => {
           const chDocs = allDocs.filter((d) => String(d.chapter_id) === String(ch.id))
@@ -274,6 +237,7 @@ export default function DashboardPage() {
                 <DocumentPages
                   key={`doc-${doc.id}`}
                   title={doc.title || "Sans titre"}
+                  subtitle={doc.description ?? ""}
                   content={doc.content}
                   chapterName={ch.label}
                   classeurName={classeurName}
@@ -298,6 +262,7 @@ export default function DashboardPage() {
                 <SignatureSheetPage
                   key={`sig-${sig.id}`}
                   title={sig.title || "Sans titre"}
+                  subtitle={sig.description ?? ""}
                   nombre={sig.nombre}
                   chapterName={ch.label}
                   classeurName={classeurName}
@@ -313,21 +278,7 @@ export default function DashboardPage() {
       <PrintPreview open={tocOpen} onOpenChange={setTocOpen}>
         <TableOfContentsPage
           classeurName={classeurName}
-          chapters={sortedChapters.map((ch, i) => {
-            const chDocs = allDocs.filter((d) => String(d.chapter_id) === String(ch.id))
-            const chSheets = allTrackingSheets.filter((s) => String(s.chapter_id) === String(ch.id))
-            const chSigs = allSignatureSheets.filter((s) => String(s.chapter_id) === String(ch.id))
-            return {
-              number: i + 1,
-              label: ch.label,
-              icon: ch.icon,
-              items: [
-                ...chDocs.map((d) => d.title || "Sans titre"),
-                ...chSheets.map((s) => s.title || "Sans titre"),
-                ...chSigs.map((s) => s.title || "Sans titre"),
-              ],
-            }
-          })}
+          chapters={tocEntries.map((e) => ({ number: e.number, label: e.chapter.label, icon: e.chapter.icon, items: e.items }))}
         />
       </PrintPreview>
 

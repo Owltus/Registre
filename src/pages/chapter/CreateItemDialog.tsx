@@ -19,9 +19,9 @@ type Step = "choose" | "form"
 interface CreateItemDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreateDocument: (title: string) => void
+  onCreateDocument: (title: string, description: string) => void
   onCreateTrackingSheet: (title: string, periodiciteId: number) => void
-  onCreateSignatureSheet: (title: string) => void
+  onCreateSignatureSheet: (title: string, description: string) => void
 }
 
 export function CreateItemDialog({
@@ -34,6 +34,7 @@ export function CreateItemDialog({
   const [step, setStep] = useState<Step>("choose")
   const [itemType, setItemType] = useState<ItemType>("document")
   const [title, setTitle] = useState("Sans titre")
+  const [description, setDescription] = useState("")
   const [periodiciteId, setPeriodiciteId] = useState<string>("")
   const { data: periodicites } = useQuery<Periodicite>("periodicites")
 
@@ -41,6 +42,7 @@ export function CreateItemDialog({
     setStep("choose")
     setItemType("document")
     setTitle("Sans titre")
+    setDescription("")
     setPeriodiciteId("")
   }
 
@@ -51,13 +53,13 @@ export function CreateItemDialog({
 
   const handleSubmit = () => {
     if (itemType === "document") {
-      onCreateDocument(title.trim() || "Sans titre")
+      onCreateDocument(title.trim() || "Sans titre", description.trim())
     } else if (itemType === "tracking_sheet") {
       const pId = Number(periodiciteId)
       if (!pId) return
       onCreateTrackingSheet(title.trim() || "Sans titre", pId)
     } else {
-      onCreateSignatureSheet(title.trim() || "Sans titre")
+      onCreateSignatureSheet(title.trim() || "Sans titre", description.trim())
     }
     reset()
   }
@@ -180,6 +182,20 @@ export function CreateItemDialog({
                   onFocus={(e) => e.target.select()}
                 />
               </div>
+
+              {(itemType === "document" || itemType === "signature_sheet") && (
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="create-description" className="text-sm font-medium">
+                    Description
+                  </label>
+                  <Input
+                    id="create-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Description (optionnel)"
+                  />
+                </div>
+              )}
 
               {itemType === "tracking_sheet" && (
                 <div className="flex flex-col gap-2">

@@ -14,6 +14,7 @@ import { ArrowLeft, Pencil, Eye, FileDown, Save } from "lucide-react"
 interface Doc {
   id: number
   title: string
+  description: string
   content: string
   chapter_id: string
   created_at: string
@@ -51,6 +52,7 @@ export default function DocumentDetail() {
 
   const [editing, setEditing] = useState(searchParams.get("edit") === "1")
   const [editTitle, setEditTitle] = useState("")
+  const [editDescription, setEditDescription] = useState("")
   const [editContent, setEditContent] = useState("")
 
   // Contenu debounced pour l'aperçu A4 (évite des re-paginations à chaque frappe)
@@ -63,6 +65,7 @@ export default function DocumentDetail() {
   useEffect(() => {
     if (doc) {
       setEditTitle(doc.title)
+      setEditDescription(doc.description ?? "")
       setEditContent(doc.content)
       setDebouncedContent(doc.content)
     }
@@ -97,6 +100,7 @@ export default function DocumentDetail() {
     if (!id) return
     await update(id, {
       title: editTitle.trim() || "Sans titre",
+      description: editDescription.trim(),
       content: editContent,
       updated_at: new Date().toISOString(),
     })
@@ -135,6 +139,7 @@ export default function DocumentDetail() {
   const handleStartEdit = () => {
     if (doc) {
       setEditTitle(doc.title)
+      setEditDescription(doc.description ?? "")
       setEditContent(doc.content)
       setDebouncedContent(doc.content)
     }
@@ -176,12 +181,20 @@ export default function DocumentDetail() {
         </Button>
 
         {editing ? (
-          <Input
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className="h-9 text-lg font-semibold flex-1"
-            placeholder="Titre du document"
-          />
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="h-9 text-lg font-semibold flex-1"
+              placeholder="Titre du document"
+            />
+            <Input
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              className="h-9 w-[200px]"
+              placeholder="Description"
+            />
+          </div>
         ) : (
           <h1 className="text-lg font-semibold flex-1 truncate">
             {doc.title || "Sans titre"}
@@ -198,6 +211,7 @@ export default function DocumentDetail() {
                 onClick={() => {
                   setEditing(false)
                   setEditTitle(doc.title)
+                  setEditDescription(doc.description ?? "")
                   setEditContent(doc.content)
                 }}
                 aria-label="Aperçu"
@@ -235,6 +249,7 @@ export default function DocumentDetail() {
             <div className="flex flex-col items-center gap-4 py-4" style={{ zoom: scale }}>
               <DocumentPages
                 title={editTitle || "Sans titre"}
+                subtitle={editDescription}
                 content={debouncedContent}
                 chapterName={chapter?.label}
                 classeurName={classeurName}
@@ -265,6 +280,7 @@ export default function DocumentDetail() {
           <div className="flex flex-col items-center gap-4 py-4" style={{ zoom: scale }}>
             <DocumentPages
               title={editTitle || "Sans titre"}
+              subtitle={editDescription}
               content={editContent}
               chapterName={chapter?.label}
               classeurName={classeurName}
@@ -279,6 +295,7 @@ export default function DocumentDetail() {
       <PrintPreview open={previewOpen} onOpenChange={setPreviewOpen}>
         <DocumentPages
           title={editTitle || "Sans titre"}
+          subtitle={editDescription}
           content={editContent}
           chapterName={chapter?.label}
           classeurName={classeurName}

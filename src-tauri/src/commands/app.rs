@@ -28,3 +28,33 @@ pub fn get_app_info(state: State<AppState>) -> AppInfo {
 pub fn get_db_url(state: State<AppState>) -> String {
     state.db_url.clone()
 }
+
+/// Ouvre le dossier contenant la base de données dans l'explorateur de fichiers
+#[tauri::command]
+pub fn open_db_folder(state: State<AppState>) -> Result<(), String> {
+    let db_url = &state.db_url;
+    let path = db_url.strip_prefix("sqlite:").unwrap_or(db_url);
+    let folder = std::path::Path::new(path)
+        .parent()
+        .ok_or("impossible de résoudre le dossier parent")?;
+
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .arg(folder)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(folder)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(folder)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}

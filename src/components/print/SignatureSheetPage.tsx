@@ -2,6 +2,7 @@ import { A4Page } from "./A4Page"
 
 interface SignatureSheetPageProps {
   title: string
+  subtitle?: string
   nombre: number
   chapterName?: string
   classeurName?: string
@@ -15,6 +16,7 @@ interface SignatureSheetPageProps {
  */
 export function SignatureSheetPage({
   title,
+  subtitle,
   nombre,
   chapterName,
   classeurName,
@@ -26,6 +28,7 @@ export function SignatureSheetPage({
   return (
     <A4Page
       title={title}
+      subtitle={subtitle}
       chapterName={chapterName}
       classeurName={classeurName}
       establishment={establishment}

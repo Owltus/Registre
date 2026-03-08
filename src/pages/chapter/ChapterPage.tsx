@@ -25,6 +25,7 @@ import { DeleteDocumentDialog } from "./DeleteDocumentDialog"
 import { DeleteTrackingSheetDialog } from "./DeleteTrackingSheetDialog"
 import { EditTrackingSheetDialog } from "./EditTrackingSheetDialog"
 import { SignatureSheetCard } from "./SignatureSheetCard"
+import { EditDocumentDialog } from "./EditDocumentDialog"
 import { EditSignatureSheetDialog } from "./EditSignatureSheetDialog"
 import { DeleteSignatureSheetDialog } from "./DeleteSignatureSheetDialog"
 import { EditChapterDialog } from "./EditChapterDialog"
@@ -85,6 +86,7 @@ export default function ChapterPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editChapterOpen, setEditChapterOpen] = useState(false)
+  const [editDoc, setEditDoc] = useState<Doc | null>(null)
   const [deleteDoc, setDeleteDoc] = useState<Doc | null>(null)
 
   // Aperçu avant impression
@@ -204,12 +206,24 @@ export default function ChapterPage() {
     setPrintPreview({ type: "document", doc })
   }, [])
 
+  // Édition document (titre + description)
+  const handleDocEditClick = useCallback((e: React.MouseEvent, doc: Doc) => {
+    e.stopPropagation()
+    setEditDoc(doc)
+  }, [])
+
+  const handleDocEditSave = useCallback(async (id: number, title: string, description: string) => {
+    await updateDoc(String(id), { title, description })
+    refetch()
+    setEditDoc(null)
+  }, [updateDoc, refetch])
+
   // Création document
-  const handleCreate = useCallback(async (title: string) => {
+  const handleCreate = useCallback(async (title: string, description: string) => {
     const nextOrder = localItems.length > 0
       ? Math.max(...localItems.map((item) => item.data.sort_order)) + 1
       : 1
-    await insert({ title, content: "", chapter_id: chapterId ?? "", sort_order: nextOrder })
+    await insert({ title, description, content: "", chapter_id: chapterId ?? "", sort_order: nextOrder })
     refetch()
     setCreateOpen(false)
   }, [insert, chapterId, refetch, localItems])
@@ -225,11 +239,11 @@ export default function ChapterPage() {
   }, [insertTs, chapterId, tsRefetch, localItems])
 
   // Création feuille de signature
-  const handleCreateSignatureSheet = useCallback(async (title: string) => {
+  const handleCreateSignatureSheet = useCallback(async (title: string, description: string) => {
     const nextOrder = localItems.length > 0
       ? Math.max(...localItems.map((item) => item.data.sort_order)) + 1
       : 1
-    await insertSs({ title, chapter_id: chapterId ?? "", nombre: 14, sort_order: nextOrder })
+    await insertSs({ title, description, chapter_id: chapterId ?? "", nombre: 14, sort_order: nextOrder })
     ssRefetch()
     setCreateOpen(false)
   }, [insertSs, chapterId, ssRefetch, localItems])
@@ -283,8 +297,8 @@ export default function ChapterPage() {
     setEditSigSheet(sheet)
   }, [])
 
-  const handleSsEditSave = useCallback(async (id: number, title: string) => {
-    await updateSs(String(id), { title })
+  const handleSsEditSave = useCallback(async (id: number, title: string, description: string) => {
+    await updateSs(String(id), { title, description })
     ssRefetch()
     setEditSigSheet(null)
   }, [updateSs, ssRefetch])
@@ -352,7 +366,7 @@ export default function ChapterPage() {
     <div className="flex flex-col h-full" {...dragProps}>
       {/* Header */}
       <div className="flex items-center gap-2 p-2 border-b border-border">
-        <span className="text-sm text-muted-foreground truncate flex-1 min-w-0">
+        <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
           {chapter.description || chapter.label}
         </span>
 
@@ -387,7 +401,7 @@ export default function ChapterPage() {
             </div>
           ) : (
             <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {localItems.map((item) =>
                   item.kind === "document" ? (
                     <DocumentCard
@@ -399,6 +413,7 @@ export default function ChapterPage() {
                       classeurName={classeurName}
                       establishment={establishment}
                       onExport={handleExport}
+                      onEdit={handleDocEditClick}
                       onDelete={handleDeleteClick}
                     />
                   ) : item.kind === "tracking_sheet" ? (
@@ -442,6 +457,7 @@ export default function ChapterPage() {
         {printPreview?.type === "document" && (
           <DocumentPages
             title={printPreview.doc.title || "Sans titre"}
+            subtitle={printPreview.doc.description ?? ""}
             content={printPreview.doc.content}
             chapterName={chapter?.label}
             classeurName={classeurName}
@@ -461,6 +477,7 @@ export default function ChapterPage() {
         {printPreview?.type === "signature_sheet" && (
           <SignatureSheetPage
             title={printPreview.sheet.title || "Sans titre"}
+            subtitle={printPreview.sheet.description ?? ""}
             nombre={printPreview.sheet.nombre}
             chapterName={chapter?.label}
             classeurName={classeurName}
@@ -479,7 +496,8 @@ export default function ChapterPage() {
             <DocumentPages
               key={`doc-${item.data.id}`}
               title={item.data.title || "Sans titre"}
-              content={item.data.content}
+              subtitle={(item.data as Doc).description ?? ""}
+              content={(item.data as Doc).content}
               chapterName={chapter?.label}
               classeurName={classeurName}
               establishment={establishment}
@@ -498,6 +516,7 @@ export default function ChapterPage() {
             <SignatureSheetPage
               key={`sig-${item.data.id}`}
               title={item.data.title || "Sans titre"}
+              subtitle={(item.data as SignatureSheet).description ?? ""}
               nombre={(item.data as SignatureSheet).nombre}
               chapterName={chapter?.label}
               classeurName={classeurName}
@@ -513,6 +532,12 @@ export default function ChapterPage() {
         onCreateDocument={handleCreate}
         onCreateTrackingSheet={handleCreateTrackingSheet}
         onCreateSignatureSheet={handleCreateSignatureSheet}
+      />
+
+      <EditDocumentDialog
+        doc={editDoc}
+        onClose={() => setEditDoc(null)}
+        onSave={handleDocEditSave}
       />
 
       <DeleteDocumentDialog

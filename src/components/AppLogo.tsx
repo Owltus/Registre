@@ -6,8 +6,7 @@ interface AppLogoProps {
 }
 
 /**
- * Logo de l'application Registre de Sécurité.
- * Utilise une icône bouclier pour représenter la sécurité ERP.
+ * Logo de l'application Registre.
  */
 export function AppLogo({ className, size = 24 }: AppLogoProps) {
   return <ShieldCheck className={className} width={size} height={size} />

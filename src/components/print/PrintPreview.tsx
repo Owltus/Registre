@@ -1,6 +1,6 @@
-import { useState, useRef, type ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
-import { X, Printer, Bug } from "lucide-react"
+import { X, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { printViaIframe } from "@/lib/print/printIframe"
 
@@ -17,7 +17,6 @@ interface PrintPreviewProps {
  * du Dialog Radix (position fixed, flex, overflow).
  */
 export function PrintPreview({ open, onOpenChange, children }: PrintPreviewProps) {
-  const [debug, setDebug] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const handlePrint = () => {
@@ -42,15 +41,6 @@ export function PrintPreview({ open, onOpenChange, children }: PrintPreviewProps
             </Dialog.Title>
             <div className="flex items-center gap-2">
               <Button
-                variant={debug ? "default" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setDebug((d) => !d)}
-                title="Mode debug — bordures des zones"
-              >
-                <Bug className="h-4 w-4" />
-              </Button>
-              <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
@@ -66,7 +56,7 @@ export function PrintPreview({ open, onOpenChange, children }: PrintPreviewProps
           </div>
 
           {/* Zone scrollable avec les pages A4 */}
-          <div ref={scrollRef} className={`print-preview-scroll flex-1 overflow-y-auto p-6 bg-muted/50 ${debug ? "a4-debug" : ""}`}>
+          <div ref={scrollRef} className="print-preview-scroll flex-1 overflow-y-auto p-6 bg-muted/50">
             <div className="flex flex-col items-center gap-6">
               {children}
             </div>

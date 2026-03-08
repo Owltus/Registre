@@ -10,6 +10,7 @@ import { A4Page } from "./A4Page"
 
 interface DocumentPagesProps {
   title: string
+  subtitle?: string
   content: string
   chapterName?: string
   classeurName?: string
@@ -42,7 +43,7 @@ const markdownComponents = {
  * Phase 1 : mesure dans un conteneur caché → découpage en pages.
  * Phase 2 : rendu du HTML extrait de chaque page dans un <A4Page>.
  */
-export function DocumentPages({ title, content, chapterName, classeurName, establishment, hidePagination, themed }: DocumentPagesProps) {
+export function DocumentPages({ title, subtitle, content, chapterName, classeurName, establishment, hidePagination, themed }: DocumentPagesProps) {
   const processedContent = preprocessPageBreaks(content)
   const { pages, measuring, measureRef } = usePagination(processedContent)
 
@@ -75,6 +76,7 @@ export function DocumentPages({ title, content, chapterName, classeurName, estab
         <A4Page
           key={i}
           title={title}
+          subtitle={subtitle}
           pageNumber={hidePagination ? undefined : i + 1}
           totalPages={hidePagination ? undefined : pages.length}
           chapterName={chapterName}

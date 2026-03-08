@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 interface SignatureSheet {
   id: number
   title: string
+  description: string
   chapter_id: string
   nombre: number
   sort_order: number
@@ -50,12 +51,14 @@ export default function SignatureSheetDetail() {
   const { update } = useMutation("signature_sheets")
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState("")
+  const [editDescription, setEditDescription] = useState("")
 
   const [scale, setScale] = useState(1)
 
   useEffect(() => {
     if (sheet) {
       setEditTitle(sheet.title) // eslint-disable-line react-hooks/set-state-in-effect
+      setEditDescription(sheet.description ?? "")  
     }
   }, [sheet?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,6 +81,7 @@ export default function SignatureSheetDetail() {
     if (!id) return
     await update(id, {
       title: editTitle.trim() || "Sans titre",
+      description: editDescription.trim(),
       updated_at: new Date().toISOString(),
     })
     refetch()
@@ -87,6 +91,7 @@ export default function SignatureSheetDetail() {
   const handleStartEdit = () => {
     if (sheet) {
       setEditTitle(sheet.title)
+      setEditDescription(sheet.description ?? "")
     }
     setEditing(true)
   }
@@ -126,12 +131,20 @@ export default function SignatureSheetDetail() {
         </Button>
 
         {editing ? (
-          <Input
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className="h-9 text-lg font-semibold flex-1 min-w-0"
-            placeholder="Titre de la feuille"
-          />
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="h-9 text-lg font-semibold flex-1"
+              placeholder="Titre de la feuille"
+            />
+            <Input
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              className="h-9 w-[200px]"
+              placeholder="Description"
+            />
+          </div>
         ) : (
           <h1 className="text-lg font-semibold flex-1 truncate">
             {sheet.title || "Sans titre"}
@@ -148,6 +161,7 @@ export default function SignatureSheetDetail() {
                 onClick={() => {
                   setEditing(false)
                   setEditTitle(sheet.title)
+                  setEditDescription(sheet.description ?? "")
                 }}
                 aria-label="Annuler"
                 title="Annuler"
@@ -187,6 +201,7 @@ export default function SignatureSheetDetail() {
         >
           <SignatureSheetPage
             title={editing ? (editTitle || "Sans titre") : (sheet.title || "Sans titre")}
+            subtitle={editing ? editDescription : (sheet.description ?? "")}
             nombre={sheet.nombre}
             chapterName={chapter?.label}
             classeurName={classeurName}
@@ -200,6 +215,7 @@ export default function SignatureSheetDetail() {
       <PrintPreview open={previewOpen} onOpenChange={setPreviewOpen}>
         <SignatureSheetPage
           title={sheet.title || "Sans titre"}
+          subtitle={sheet.description ?? ""}
           nombre={sheet.nombre}
           chapterName={chapter?.label}
           classeurName={classeurName}

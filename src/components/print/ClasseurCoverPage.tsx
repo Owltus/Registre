@@ -5,15 +5,26 @@ import {
   MARGIN_BOTTOM_MM,
   MARGIN_X_MM,
 } from "@/lib/print/constants"
-import { DEFAULT_REGISTRY_NAME } from "@/lib/navigation"
+import { DEFAULT_REGISTRY_NAME, getChapterIcon } from "@/lib/navigation"
 
 interface ClasseurCoverPageProps {
   classeurName?: string
+  classeurIcon?: string
+  etablissement?: string
+  etablissementComplement?: string
   themed?: boolean
 }
 
-/** Page de garde générale du classeur — nom centré, sans header ni footer */
-export function ClasseurCoverPage({ classeurName = DEFAULT_REGISTRY_NAME, themed }: ClasseurCoverPageProps) {
+/** Page de garde générale du classeur — icône, nom, établissement, centré */
+export function ClasseurCoverPage({
+  classeurName = DEFAULT_REGISTRY_NAME,
+  classeurIcon,
+  etablissement,
+  etablissementComplement,
+  themed,
+}: ClasseurCoverPageProps) {
+  const Icon = classeurIcon ? getChapterIcon(classeurIcon) : null
+
   return (
     <div
       className={themed ? "a4-page a4-page-themed bg-card text-card-foreground" : "a4-page"}
@@ -32,7 +43,16 @@ export function ClasseurCoverPage({ classeurName = DEFAULT_REGISTRY_NAME, themed
         textAlign: "center",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12mm" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10mm" }}>
+        {/* Icône du classeur */}
+        {Icon && (
+          <Icon
+            width={72}
+            height={72}
+            style={{ color: themed ? "hsl(var(--muted-foreground))" : "#666" }}
+          />
+        )}
+
         {/* Nom du classeur */}
         <span
           style={{
@@ -53,6 +73,36 @@ export function ClasseurCoverPage({ classeurName = DEFAULT_REGISTRY_NAME, themed
             backgroundColor: themed ? "hsl(var(--border))" : "#999",
           }}
         />
+
+        {/* Établissement */}
+        {etablissement && (
+          <span
+            style={{
+              fontSize: "14pt",
+              fontWeight: 400,
+              color: themed ? "hsl(var(--muted-foreground))" : "#555",
+              maxWidth: "140mm",
+              lineHeight: 1.5,
+            }}
+          >
+            {etablissement}
+          </span>
+        )}
+
+        {/* Complément */}
+        {etablissementComplement && (
+          <span
+            style={{
+              fontSize: "11pt",
+              fontWeight: 400,
+              color: themed ? "hsl(var(--muted-foreground))" : "#777",
+              maxWidth: "140mm",
+              lineHeight: 1.5,
+            }}
+          >
+            {etablissementComplement}
+          </span>
+        )}
       </div>
     </div>
   )

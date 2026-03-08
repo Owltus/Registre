@@ -1,5 +1,5 @@
 {
-  "name": "registre-de-securite",
+  "name": "registre",
   "private": true,
   "version": "0.2.1",
   "type": "module",
@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "release:patch": "npx bumpp patch --no-push --commit \"build: release v%s\" --tag \"v%s\" --execute \"node scripts/sync-version.mjs %s\"",
+    "release:minor": "npx bumpp minor --no-push --commit \"build: release v%s\" --tag \"v%s\" --execute \"node scripts/sync-version.mjs %s\"",
+    "release:major": "npx bumpp major --no-push --commit \"build: release v%s\" --tag \"v%s\" --execute \"node scripts/sync-version.mjs %s\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

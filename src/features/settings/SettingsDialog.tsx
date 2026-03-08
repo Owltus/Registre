@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Sun, Moon, Palette, Info, X } from "lucide-react"
+import { Sun, Moon, Palette, Info, X, Database, FolderOpen } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -16,6 +16,7 @@ interface AppInfo {
 
 const sections = [
   { id: "appearance", label: "Apparence", icon: Palette },
+  { id: "data", label: "Données", icon: Database },
   { id: "about", label: "À propos", icon: Info },
 ] as const
 
@@ -33,6 +34,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SectionId>("appearance")
   const [currentTheme, setCurrentTheme] = useState<Theme>(getStoredTheme)
   const [info, setInfo] = useState<AppInfo | null>(null)
+  const [dbFolder, setDbFolder] = useState("")
 
   // Détecte si la nav interne est rétractée (icônes seules)
   const [isCollapsed, setIsCollapsed] = useState(() => !window.matchMedia(SM_QUERY).matches)
@@ -50,7 +52,14 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   useEffect(() => {
     if (open) {
-      invoke<AppInfo>("get_app_info").then(setInfo)
+      invoke<AppInfo>("get_app_info").then(setInfo)  
+      invoke<string>("get_db_url").then((url) => {
+        // url = "sqlite:C:\...\sqlite\classeur.db" → extraire le dossier parent
+        const path = url.replace(/^sqlite:/, "")
+        const sep = path.includes("\\") ? "\\" : "/"
+        const folder = path.substring(0, path.lastIndexOf(sep))
+        setDbFolder(folder)  
+      })
     }
   }, [open])
 
@@ -139,6 +148,29 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                       onClick={() => setCurrentTheme("system")}
                     >
                       Système
+                    </Button>
+                  </div>
+                </section>
+              )}
+
+              {activeSection === "data" && (
+                <section>
+                  <h2 className="text-base font-semibold">Données</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Les données de l'application sont stockées localement dans une base SQLite.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-3">
+                    <p className="text-xs text-muted-foreground font-mono break-all">
+                      {dbFolder || "Chargement…"}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => invoke("open_db_folder")}
+                      disabled={!dbFolder}
+                    >
+                      <FolderOpen className="h-4 w-4 mr-2" />
+                      Ouvrir le dossier
                     </Button>
                   </div>
                 </section>

@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "registre-de-securite",
-  "version": "0.2.0",
-  "identifier": "com.registre.securite",
+  "productName": "registre",
+  "version": "0.2.1",
+  "identifier": "com.owltus.registre",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Registre de Sécurité",
+        "title": "Registre",
         "width": 1024,
         "height": 768,
         "resizable": true,

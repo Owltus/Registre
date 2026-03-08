@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    registre_de_securite_lib::run()
+    registre_lib::run()
 }

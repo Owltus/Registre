@@ -1,4 +1,4 @@
--- Schema initial — Registre de Sécurité ERP
+-- Schema initial — Registre
 
 -- Préférences utilisateur (thème, etc.)
 CREATE TABLE IF NOT EXISTS preferences (

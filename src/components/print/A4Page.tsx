@@ -60,8 +60,8 @@ export function A4Page({
     >
       <PageHeader title={title} />
 
-      {/* Sous-titre optionnel (feuilles de suivi) */}
-      {subtitle && (
+      {/* Sous-titre — toujours présent si la prop est définie (même vide) */}
+      {subtitle !== undefined && (
         <div
           className="dbg-subtitle"
           style={{

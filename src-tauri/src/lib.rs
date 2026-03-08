@@ -8,7 +8,7 @@ use tauri::Manager;
 /// Résout le dossier de données selon le mode d'exécution :
 /// - Dev : `<racine du projet>/sqlite/` (via CARGO_MANIFEST_DIR)
 /// - Production portable : `<dossier de l'exe>/sqlite/` (si fichier `portable` présent à côté de l'exe)
-/// - Production installée : `<AppData>/com.registre.securite/sqlite/`
+/// - Production installée : `<AppData>/com.owltus.registre/sqlite/`
 fn resolve_db_path() -> String {
     let base_dir = if cfg!(debug_assertions) {
         // Dev : CARGO_MANIFEST_DIR pointe vers src-tauri/, on remonte à la racine
@@ -30,7 +30,7 @@ fn resolve_db_path() -> String {
             // Mode installé : données dans AppData
             dirs::data_dir()
                 .expect("impossible de résoudre le dossier AppData")
-                .join("com.registre.securite")
+                .join("com.owltus.registre")
         }
     };
 
@@ -78,6 +78,12 @@ pub fn run() {
                             sql: include_str!("../sql/v4_etablissement.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 5,
+                            description: "description sur documents et feuilles de signature",
+                            sql: include_str!("../sql/v5_description.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
@@ -85,6 +91,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::get_app_info,
             commands::app::get_db_url,
+            commands::app::open_db_folder,
             commands::files::read_file,
             commands::files::write_file,
         ])

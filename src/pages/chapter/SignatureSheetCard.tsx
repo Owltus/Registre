@@ -78,6 +78,7 @@ export function SignatureSheetCard({ sheet, chapterId, classeurId, chapterName, 
         <A4Preview>
           <SignatureSheetPage
             title={sheet.title || "Sans titre"}
+            subtitle={sheet.description ?? ""}
             nombre={sheet.nombre}
             chapterName={chapterName}
             classeurName={classeurName}

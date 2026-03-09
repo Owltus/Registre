@@ -38,9 +38,8 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri (portable uniquement)
-        run: pnpm tauri build --bundles none
-        # "none" = pas d'installeur, uniquement l'exécutable brut
+      - name: Build Tauri
+        run: pnpm tauri build
 
       - name: Extraire la version depuis le tag
         id: version

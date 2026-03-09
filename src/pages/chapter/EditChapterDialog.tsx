@@ -4,32 +4,35 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { X, Trash2 } from "lucide-react"
+import { IconPicker } from "@/components/IconPicker"
 import type { ChapterRow } from "@/lib/navigation"
 
 interface EditChapterDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   chapter: ChapterRow
-  onSave: (label: string, description: string) => void
+  onSave: (label: string, description: string, icon: string) => void
   onDelete: () => void
 }
 
 export function EditChapterDialog({ open, onOpenChange, chapter, onSave, onDelete }: EditChapterDialogProps) {
   const [label, setLabel] = useState(chapter.label)
   const [description, setDescription] = useState(chapter.description)
+  const [icon, setIcon] = useState(chapter.icon)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const handleOpenChange = (v: boolean) => {
     if (v) {
       setLabel(chapter.label)
       setDescription(chapter.description)
+      setIcon(chapter.icon)
       setConfirmDelete(false)
     }
     onOpenChange(v)
   }
 
   const handleSubmit = () => {
-    onSave(label.trim() || chapter.label, description.trim())
+    onSave(label.trim() || chapter.label, description.trim(), icon)
   }
 
   // Vue confirmation de suppression
@@ -108,6 +111,11 @@ export function EditChapterDialog({ open, onOpenChange, chapter, onSave, onDelet
                 placeholder="Nom du chapitre"
                 autoFocus
               />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Icône</label>
+              <IconPicker value={icon} onChange={setIcon} />
             </div>
 
             <div className="flex flex-col gap-2">

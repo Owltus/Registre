@@ -72,7 +72,7 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
             onClick={onClick}
             className={({ isActive }) =>
               cn(
-                "flex items-center rounded-lg py-2 transition-colors",
+                "flex items-center rounded-lg py-2 transition-colors min-w-0",
                 !responsive && "gap-3 px-3",
                 isActive
                   ? "bg-accent text-accent-foreground"
@@ -89,7 +89,7 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
               <Icon className="h-5 w-5 shrink-0" />
             )}
             <span className={cn(
-              "text-sm whitespace-nowrap",
+              "text-sm truncate",
               responsive && "transition-opacity duration-200",
               responsive && !isExpanded && "opacity-0"
             )}>

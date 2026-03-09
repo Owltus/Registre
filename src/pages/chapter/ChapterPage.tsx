@@ -317,9 +317,9 @@ export default function ChapterPage() {
   }, [deleteSigSheet, removeSs, ssRefetch])
 
   // Édition du chapitre
-  const handleChapterSave = useCallback(async (label: string, description: string) => {
+  const handleChapterSave = useCallback(async (label: string, description: string, icon: string) => {
     if (!chapterId) return
-    await updateChapter(chapterId, { label, description })
+    await updateChapter(chapterId, { label, description, icon })
     chapterRefetch()
     emit(CHAPTERS_CHANGED)
     setEditChapterOpen(false)

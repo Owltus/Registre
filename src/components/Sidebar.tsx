@@ -135,7 +135,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
             <button
               onClick={() => { navigate("/"); onItemClick?.() }}
               className={cn(
-                "flex items-center rounded-lg py-2 transition-colors w-full",
+                "flex items-center rounded-lg py-2 transition-colors w-full min-w-0",
                 "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                 !responsive && "gap-3 px-3"
               )}
@@ -148,7 +148,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
                 <Library className="h-5 w-5 shrink-0" />
               )}
               <span className={cn(
-                "text-sm whitespace-nowrap",
+                "text-sm truncate",
                 responsive && "transition-opacity duration-200",
                 responsive && !isExpanded && "opacity-0"
               )}>
@@ -173,7 +173,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
             <button
               onClick={() => { if (classeurId) navigate(`/classeurs/${classeurId}`); onItemClick?.() }}
               className={cn(
-                "flex items-center rounded-lg py-2 transition-colors w-full",
+                "flex items-center rounded-lg py-2 transition-colors w-full min-w-0",
                 isOnDashboard
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -188,7 +188,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
                 <Home className="h-5 w-5 shrink-0" />
               )}
               <span className={cn(
-                "text-sm whitespace-nowrap",
+                "text-sm truncate",
                 responsive && "transition-opacity duration-200",
                 responsive && !isExpanded && "opacity-0"
               )}>
@@ -267,7 +267,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
           </div>
 
           {showChapters && (
-            <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
+            <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto overflow-x-hidden">
               <MobileChapterList onItemClick={onClose} />
             </nav>
           )}
@@ -303,7 +303,7 @@ export function Sidebar({ mobile = false, open = false, onClose, onOpenSettings 
         </div>
 
         {showChapters && (
-          <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
+          <nav className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto overflow-x-hidden">
             <DesktopChapterList responsive />
           </nav>
         )}

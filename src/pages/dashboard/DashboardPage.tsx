@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo, Fragment } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import * as Dialog from "@radix-ui/react-dialog"
-import { Pencil, X, Plus, Printer, List } from "lucide-react"
+import { Pencil, X, Plus, Printer, List, FileArchive, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DEFAULT_REGISTRY_NAME, buildEstablishment, getChapterIcon, type ChapterRow, type ClasseurRow } from "@/lib/navigation"
+import { DEFAULT_REGISTRY_NAME, buildEstablishment, type ChapterRow, type ClasseurRow } from "@/lib/navigation"
 import { useQuery } from "@/lib/hooks/useQuery"
 import { useMutation } from "@/lib/hooks/useMutation"
 import { sqliteAdapter } from "@/lib/db/sqlite"
 import { emit, on, CHAPTERS_CHANGED, CLASSEURS_CHANGED } from "@/lib/events"
 import { IconPicker } from "@/components/IconPicker"
+import { exportClasseurZip, type ExportChapter, exportDatabase } from "@/lib/exportMarkdown"
 import { PrintPreview } from "@/components/print/PrintPreview"
 import { ClasseurCoverPage } from "@/components/print/ClasseurCoverPage"
 import { TableOfContentsPage } from "@/components/print/TableOfContentsPage"
@@ -148,29 +149,6 @@ export default function DashboardPage() {
       {/* Corps */}
       <div className="flex-1 overflow-y-auto flex items-center justify-center p-6">
         <div className="flex flex-col gap-6 max-w-md w-full">
-          {/* Carte d'identité */}
-          {classeur && (() => {
-            const ClasseurIcon = getChapterIcon(classeur.icon)
-            return (
-              <div className="rounded-lg border bg-card px-5 py-5">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-accent-foreground shrink-0">
-                    <ClasseurIcon className="h-6 w-6" />
-                  </div>
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <span className="text-base font-semibold truncate">{classeur.name}</span>
-                    {classeur.etablissement && (
-                      <span className="text-sm text-muted-foreground truncate">{classeur.etablissement}</span>
-                    )}
-                    {classeur.etablissement_complement && (
-                      <span className="text-xs text-muted-foreground/70 truncate">{classeur.etablissement_complement}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-
           {/* Actions */}
           <div className="flex flex-col gap-3">
           <button
@@ -199,7 +177,7 @@ export default function DashboardPage() {
           >
             <List className="h-5 w-5 text-muted-foreground shrink-0" />
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">Exporter le sommaire</span>
+              <span className="text-sm font-medium">Afficher le sommaire</span>
               <span className="text-xs text-muted-foreground">Générer un PDF avec la table des matières du classeur</span>
             </div>
           </button>
@@ -209,8 +187,37 @@ export default function DashboardPage() {
           >
             <Printer className="h-5 w-5 text-muted-foreground shrink-0" />
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">Exporter le classeur complet</span>
+              <span className="text-sm font-medium">Exporter le classeur en PDF</span>
               <span className="text-xs text-muted-foreground">Générer un PDF avec l'ensemble des chapitres et documents</span>
+            </div>
+          </button>
+          <button
+            onClick={() => {
+              const data: ExportChapter[] = sortedChapters.map((ch, i) => ({
+                label: ch.label,
+                sortOrder: i + 1,
+                documents: allDocs
+                  .filter((d) => String(d.chapter_id) === String(ch.id))
+                  .map((d) => ({ title: d.title, content: d.content })),
+              }))
+              exportClasseurZip(classeurName, data)
+            }}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <FileArchive className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Exporter le classeur en Markdown</span>
+              <span className="text-xs text-muted-foreground">Créer une archive contenant tous les documents</span>
+            </div>
+          </button>
+          <button
+            onClick={() => exportDatabase(classeurName, Number(classeurId))}
+            className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+          >
+            <Database className="h-5 w-5 text-muted-foreground shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Exporter le classeur en base de données</span>
+              <span className="text-xs text-muted-foreground">Sauvegarder les données du classeur dans un fichier SQLite</span>
             </div>
           </button>
           </div>

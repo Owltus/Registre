@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import * as Dialog from "@radix-ui/react-dialog"
-import { Plus, X, Trash2 } from "lucide-react"
+import { Plus, X, Trash2, Download, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getChapterIcon, type ClasseurRow } from "@/lib/navigation"
@@ -10,6 +10,7 @@ import { useMutation } from "@/lib/hooks/useMutation"
 import { sqliteAdapter } from "@/lib/db/sqlite"
 import { emit, on, CLASSEURS_CHANGED } from "@/lib/events"
 import { IconPicker } from "@/components/IconPicker"
+import { importDatabase, importDatabaseFromBytes } from "@/lib/exportMarkdown"
 
 /** Chapitres par défaut à insérer dans chaque nouveau classeur */
 const DEFAULT_CHAPTERS = [
@@ -36,6 +37,47 @@ export default function ClasseurListPage() {
   useEffect(() => on(CLASSEURS_CHANGED, refetch), [refetch])
 
   const sortedClasseurs = [...classeurs].sort((a, b) => a.sort_order - b.sort_order)
+
+  // Drag-and-drop .db
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounter = useRef(0)
+
+  const handleImportResult = useCallback(async (newId: number | null) => {
+    if (newId) {
+      emit(CLASSEURS_CHANGED)
+      refetch()
+      navigate(`/classeurs/${newId}`)
+    }
+  }, [refetch, navigate])
+
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current++
+    setIsDragOver(true)
+  }, [])
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
+
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current--
+    if (dragCounter.current === 0) setIsDragOver(false)
+  }, [])
+
+  const onDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragOver(false)
+
+    const file = Array.from(e.dataTransfer.files).find((f) => f.name.endsWith(".db"))
+    if (!file) return
+
+    const buffer = await file.arrayBuffer()
+    const newId = await importDatabaseFromBytes(buffer)
+    handleImportResult(newId)
+  }, [handleImportResult])
 
   // Dialog de création
   const [createOpen, setCreateOpen] = useState(false)
@@ -107,6 +149,25 @@ export default function ClasseurListPage() {
               <Plus className="h-5 w-5" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Nouveau classeur</span>
+          </button>
+
+          <button
+            onClick={async () => {
+              const newId = await importDatabase()
+              handleImportResult(newId)
+            }}
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`relative flex items-center gap-4 rounded-lg border border-dashed px-5 py-4 hover:bg-accent transition-colors text-left ${isDragOver ? "border-primary bg-primary/5" : "bg-card"}`}
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${isDragOver ? "bg-primary/10 text-primary" : "bg-accent text-accent-foreground"}`}>
+              {isDragOver ? <Upload className="h-5 w-5" /> : <Download className="h-5 w-5" />}
+            </div>
+            <span className={`text-sm font-medium ${isDragOver ? "text-primary" : "text-muted-foreground"}`}>
+              {isDragOver ? "Déposez le fichier .db ici" : "Importer un classeur"}
+            </span>
           </button>
 
           {sortedClasseurs.length > 0 && <div className="border-b border-border" />}

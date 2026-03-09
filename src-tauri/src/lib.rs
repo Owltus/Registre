@@ -112,6 +112,10 @@ pub fn run() {
             commands::app::open_db_folder,
             commands::files::read_file,
             commands::files::write_file,
+            commands::files::write_file_binary,
+            commands::files::export_database,
+            commands::files::import_database,
+            commands::files::import_database_from_bytes,
         ])
         .setup(|app| {
             // Définir l'icône de la fenêtre (visible en dev et en build)

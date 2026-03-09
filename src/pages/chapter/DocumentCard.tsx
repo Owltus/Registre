@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
-import { Trash2, FileDown, FileText, Pencil } from "lucide-react"
+import { Trash2, FileDown, FileText, Pencil, FileOutput } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DocumentPages } from "@/components/print/DocumentPages"
 import type { Doc } from "./types"
 import type { DocumentDragData } from "@/lib/dnd/useDndRegistry"
+import { exportMarkdown } from "@/lib/exportMarkdown"
 import { A4Preview } from "./A4Preview"
 
 interface DocumentCardProps {
@@ -48,6 +49,11 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
     transform: CSS.Transform.toString(transform),
     transition,
   }
+
+  const handleExportMd = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    exportMarkdown(doc.title, doc.content)
+  }, [doc.title, doc.content])
 
   const handleClick = useCallback(() => {
     navigate(classeurId ? `/classeurs/${classeurId}/chapitres/${chapterId}/documents/${doc.id}` : `/chapitres/${chapterId}/documents/${doc.id}`)
@@ -92,6 +98,9 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
           <div className="flex items-center gap-1 rounded-md bg-background/90 border border-border shadow-sm px-1 py-0.5">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => onExport(e, doc)} aria-label="Exporter PDF">
               <FileDown className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleExportMd} aria-label="Exporter Markdown">
+              <FileOutput className="h-3.5 w-3.5" />
             </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => onEdit(e, doc)} aria-label="Modifier">
               <Pencil className="h-3.5 w-3.5" />

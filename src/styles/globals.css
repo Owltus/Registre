@@ -310,8 +310,14 @@
   margin-top: 0 !important;
 }
 .pdf-prose p  { margin-bottom: 0.3cm; orphans: 3; widows: 3; }
-.pdf-prose ul, .pdf-prose ol { padding-left: 1.2cm; margin-bottom: 0.3cm; }
+.pdf-prose ul { list-style-type: disc; padding-left: 1.2cm; margin-bottom: 0.3cm; }
+.pdf-prose ol { list-style-type: decimal; padding-left: 1.2cm; margin-bottom: 0.3cm; }
 .pdf-prose li { margin-bottom: 0.1cm; }
+/* Listes imbriquées — styles différenciés par niveau */
+.pdf-prose ul ul { list-style-type: circle; }
+.pdf-prose ul ul ul { list-style-type: square; }
+.pdf-prose ol ol { list-style-type: lower-alpha; }
+.pdf-prose ol ol ol { list-style-type: lower-roman; }
 .pdf-prose ul.contains-task-list { list-style-type: none; padding-left: 0; }
 .pdf-prose li.task-list-item { display: flex; align-items: baseline; gap: 0.3cm; }
 .pdf-prose :not(pre) > code {

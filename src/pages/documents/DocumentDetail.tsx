@@ -9,7 +9,8 @@ import { DocumentPages } from "@/components/print/DocumentPages"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Pencil, Eye, FileDown, Save } from "lucide-react"
+import { ArrowLeft, Pencil, Eye, FileDown, FileOutput, Save } from "lucide-react"
+import { exportMarkdown } from "@/lib/exportMarkdown"
 
 interface Doc {
   id: number
@@ -230,6 +231,9 @@ export default function DocumentDetail() {
               </Button>
               <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleExport} aria-label="Exporter PDF" title="Exporter PDF">
                 <FileDown className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => exportMarkdown(editTitle, editContent)} aria-label="Exporter Markdown" title="Exporter Markdown">
+                <FileOutput className="h-4 w-4" />
               </Button>
             </>
           )}

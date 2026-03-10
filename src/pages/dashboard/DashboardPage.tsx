@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { toast } from "sonner"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Pencil, X, Plus, Printer, List, FileArchive, Database } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -211,15 +212,20 @@ export default function DashboardPage() {
           </button>
           <button
             disabled={!dataLoaded}
-            onClick={() => {
-              const data: ExportChapter[] = sortedChapters.map((ch, i) => ({
-                label: ch.label,
-                sortOrder: i + 1,
-                documents: allDocs
-                  .filter((d) => String(d.chapter_id) === String(ch.id))
-                  .map((d) => ({ title: d.title, content: d.content })),
-              }))
-              exportClasseurZip(classeurName, data)
+            onClick={async () => {
+              try {
+                const data: ExportChapter[] = sortedChapters.map((ch, i) => ({
+                  label: ch.label,
+                  sortOrder: i + 1,
+                  documents: allDocs
+                    .filter((d) => String(d.chapter_id) === String(ch.id))
+                    .map((d) => ({ title: d.title, content: d.content })),
+                }))
+                await exportClasseurZip(classeurName, data)
+                toast.success("Export Markdown terminé")
+              } catch {
+                toast.error("Erreur lors de l'export Markdown")
+              }
             }}
             className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left disabled:opacity-50 disabled:pointer-events-none"
           >
@@ -230,7 +236,14 @@ export default function DashboardPage() {
             </div>
           </button>
           <button
-            onClick={() => exportDatabase(classeurName, Number(classeurId))}
+            onClick={async () => {
+              try {
+                await exportDatabase(classeurName, Number(classeurId))
+                toast.success("Export base de données terminé")
+              } catch {
+                toast.error("Erreur lors de l'export base de données")
+              }
+            }}
             className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
           >
             <Database className="h-5 w-5 text-muted-foreground shrink-0" />

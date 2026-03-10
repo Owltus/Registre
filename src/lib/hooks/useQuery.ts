@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { sqliteAdapter } from "@/lib/db/sqlite"
 
 interface UseQueryResult<T> {
@@ -16,20 +16,27 @@ export function useQuery<T = unknown>(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
+  // Stabiliser les dépendances : JSON.stringify évite les re-renders
+  // causés par un objet filters recréé à chaque render
+  const filtersKey = JSON.stringify(filters)
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
+
   const fetch = useCallback(() => {
     setLoading(true)
     sqliteAdapter
-      .getAll(table, filters)
+      .getAll(table, filtersRef.current)
       .then((rows) => {
         setData(rows as T[])
         setError(null)
       })
       .catch(setError)
       .finally(() => setLoading(false))
-  }, [table, filters])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, filtersKey])
 
   useEffect(() => {
-    fetch() // eslint-disable-line react-hooks/set-state-in-effect
+    fetch()  
   }, [fetch])
 
   return { data, loading, error, refetch: fetch }

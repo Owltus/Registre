@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { Toaster } from "sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ErrorBoundary } from "@/components/fallback/ErrorBoundary"
 import LoadingSpinner from "@/components/fallback/LoadingSpinner"
@@ -37,6 +38,7 @@ function App() {
           </Suspense>
         </BrowserRouter>
       </TooltipProvider>
+      <Toaster richColors position="bottom-right" />
     </ErrorBoundary>
   )
 }

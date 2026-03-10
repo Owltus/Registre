@@ -1,9 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
-import { useParams, useNavigate } from "react-router-dom"
-import { useQuery } from "@/lib/hooks/useQuery"
-import { useMutation } from "@/lib/hooks/useMutation"
-import type { ChapterRow, ClasseurRow } from "@/lib/navigation"
-import { DEFAULT_REGISTRY_NAME, buildEstablishment } from "@/lib/navigation"
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { useDetailPage } from "@/lib/hooks/useDetailPage"
+import { usePageScale } from "@/lib/hooks/usePageScale"
 import { PrintPreview } from "@/components/print/PrintPreview"
 import { IntercalaireSheet } from "@/components/print/IntercalaireSheet"
 import { Button } from "@/components/ui/button"
@@ -21,39 +19,18 @@ interface Intercalaire {
   updated_at: string
 }
 
-// Taille native de la page A4 en px
-const PAGE_W_PX = 210 * 3.7795
-const PAGE_H_PX = 297 * 3.7795
-
 export default function IntercalaireDetail() {
-  const { id, chapterId, classeurId } = useParams<{ id: string; chapterId: string; classeurId: string }>()
-  const navigate = useNavigate()
+  const {
+    id, navigate, backPath, item: page, loading, refetch,
+    classeurName, establishment, chapter, update,
+  } = useDetailPage<Intercalaire>("intercalaires")
+
   const [previewOpen, setPreviewOpen] = useState(false)
+  const { containerRef, scale } = usePageScale("fit")
 
-  const backPath = classeurId && chapterId
-    ? `/classeurs/${classeurId}/chapitres/${chapterId}`
-    : chapterId ? `/chapitres/${chapterId}` : "/"
-
-  const filters = useMemo(() => ({ id: Number(id) }), [id])
-  const { data: pages, loading, refetch } = useQuery<Intercalaire>("intercalaires", filters)
-  const page = pages[0] ?? null
-
-  const classeurFilters = useMemo(() => ({ id: Number(classeurId) }), [classeurId])
-  const { data: classeurRows } = useQuery<ClasseurRow>("classeurs", classeurFilters)
-  const classeurObj = classeurRows[0] ?? null
-  const classeurName = classeurObj?.name ?? DEFAULT_REGISTRY_NAME
-  const establishment = buildEstablishment(classeurObj)
-
-  const chapterFilters = useMemo(() => ({ id: Number(chapterId) }), [chapterId])
-  const { data: chapterRows } = useQuery<ChapterRow>("chapters", chapterFilters)
-  const chapter = chapterRows[0] ?? null
-
-  const { update } = useMutation("intercalaires")
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
-
-  const [scale, setScale] = useState(1)
 
   useEffect(() => {
     if (page) {
@@ -62,30 +39,20 @@ export default function IntercalaireDetail() {
     }
   }, [page?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ref callback pour attacher le ResizeObserver directement
-  const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return
-    const compute = () => {
-      const rect = node.getBoundingClientRect()
-      const pad = 32
-      const sx = (rect.width - pad) / PAGE_W_PX
-      const sy = (rect.height - pad) / PAGE_H_PX
-      setScale(Math.min(sx, sy))
-    }
-    compute()
-    const ro = new ResizeObserver(compute)
-    ro.observe(node)
-  }, [])
-
   const handleSave = async () => {
     if (!id) return
-    await update(id, {
-      title: editTitle.trim() || "Sans titre",
-      description: editDescription.trim(),
-      updated_at: new Date().toISOString(),
-    })
-    refetch()
-    setEditing(false)
+    try {
+      await update(id, {
+        title: editTitle.trim() || "Sans titre",
+        description: editDescription.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      refetch()
+      setEditing(false)
+      toast.success("Intercalaire enregistré")
+    } catch {
+      toast.error("Erreur lors de la sauvegarde")
+    }
   }
 
   const handleStartEdit = () => {
@@ -211,7 +178,7 @@ export default function IntercalaireDetail() {
 
       {/* Corps — la page A4 originale, scalée via transform pour remplir l'espace */}
       <div
-        ref={containerCallbackRef}
+        ref={containerRef}
         className="flex-1 overflow-hidden bg-muted/30"
         style={{ position: "relative" }}
       >

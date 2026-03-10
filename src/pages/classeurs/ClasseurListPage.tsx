@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 import * as Dialog from "@radix-ui/react-dialog"
 import { Plus, X, Trash2, Download, Upload } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -47,6 +48,7 @@ export default function ClasseurListPage() {
     if (newId) {
       emit(CLASSEURS_CHANGED)
       refetch()
+      toast.success("Classeur importé")
       navigate(`/classeurs/${newId}`)
     }
   }, [refetch, navigate])

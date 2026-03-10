@@ -56,50 +56,8 @@ pub fn run() {
                     vec![
                         tauri_plugin_sql::Migration {
                             version: 1,
-                            description: "initialisation de la base de données",
+                            description: "schema complet",
                             sql: include_str!("../sql/schema.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 2,
-                            description: "feuilles de signature",
-                            sql: include_str!("../sql/v2_signature_sheets.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 3,
-                            description: "support multi-classeurs",
-                            sql: include_str!("../sql/v3_classeurs.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 4,
-                            description: "établissement sur le classeur",
-                            sql: include_str!("../sql/v4_etablissement.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 5,
-                            description: "description sur documents et feuilles de signature",
-                            sql: include_str!("../sql/v5_description.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 6,
-                            description: "ajout périodicité quadriennal et colonne de tri",
-                            sql: include_str!("../sql/v6_quadriennal.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 7,
-                            description: "pages de garde (intercalaires)",
-                            sql: include_str!("../sql/v7_garde_pages.sql"),
-                            kind: tauri_plugin_sql::MigrationKind::Up,
-                        },
-                        tauri_plugin_sql::Migration {
-                            version: 8,
-                            description: "renommage garde_pages en intercalaires",
-                            sql: include_str!("../sql/v8_rename_intercalaires.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
                     ],

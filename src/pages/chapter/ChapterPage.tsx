@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 import type { DragEndEvent } from "@dnd-kit/core"
 import {
   SortableContext,
@@ -24,15 +25,10 @@ import { DocumentCard } from "./DocumentCard"
 import { TrackingSheetCard } from "./TrackingSheetCard"
 import { IntercalaireCard } from "./IntercalaireCard"
 import { CreateItemDialog } from "./CreateItemDialog"
-import { DeleteDocumentDialog } from "./DeleteDocumentDialog"
-import { DeleteTrackingSheetDialog } from "./DeleteTrackingSheetDialog"
+import { DeleteItemDialog } from "./DeleteItemDialog"
+import { EditItemDialog } from "./EditItemDialog"
 import { EditTrackingSheetDialog } from "./EditTrackingSheetDialog"
 import { SignatureSheetCard } from "./SignatureSheetCard"
-import { EditDocumentDialog } from "./EditDocumentDialog"
-import { EditSignatureSheetDialog } from "./EditSignatureSheetDialog"
-import { DeleteSignatureSheetDialog } from "./DeleteSignatureSheetDialog"
-import { EditIntercalaireDialog } from "./EditIntercalaireDialog"
-import { DeleteIntercalaireDialog } from "./DeleteIntercalaireDialog"
 import { EditChapterDialog } from "./EditChapterDialog"
 import { useDropZone, DropOverlay } from "./DropZone"
 import { emit, CHAPTERS_CHANGED } from "@/lib/events"
@@ -99,8 +95,10 @@ export default function ChapterPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editChapterOpen, setEditChapterOpen] = useState(false)
+
+  // Dialogs génériques — item + type
   const [editDoc, setEditDoc] = useState<Doc | null>(null)
-  const [deleteDoc, setDeleteDoc] = useState<Doc | null>(null)
+  const [deleteItem, setDeleteItem] = useState<{ item: { title: string; id: number }; kind: "document" | "tracking_sheet" | "signature_sheet" | "intercalaire" } | null>(null)
 
   // Aperçu avant impression
   type PrintPreviewState =
@@ -114,15 +112,12 @@ export default function ChapterPage() {
 
   // États feuilles de suivi
   const [editSheet, setEditSheet] = useState<TrackingSheet | null>(null)
-  const [deleteSheet, setDeleteSheet] = useState<TrackingSheet | null>(null)
 
   // États feuilles de signature
   const [editSigSheet, setEditSigSheet] = useState<SignatureSheet | null>(null)
-  const [deleteSigSheet, setDeleteSigSheet] = useState<SignatureSheet | null>(null)
 
   // États intercalaires
   const [editIntercalaire, setEditIntercalaire] = useState<Intercalaire | null>(null)
-  const [deleteIntercalaire, setDeleteIntercalaire] = useState<Intercalaire | null>(null)
 
   // Drag-and-drop fichiers (import)
   const handleImport = useCallback(async (files: { title: string; content: string }[]) => {
@@ -154,7 +149,7 @@ export default function ChapterPage() {
       // Cas 1 : drop sur un chapitre de la sidebar → déplacer l'item
       if (overData?.type === "chapter") {
         const targetChapterId = overData.chapterId ?? String(over.id)
-        const sourceChapterId = data.type === "document" ? data.sourceChapterId : data.sourceChapterId
+        const sourceChapterId = data.sourceChapterId
         if (targetChapterId === sourceChapterId) return
 
         if (data.type === "document") {
@@ -242,11 +237,16 @@ export default function ChapterPage() {
     setEditDoc(doc)
   }, [])
 
-  const handleDocEditSave = useCallback(async (id: number, title: string, description: string) => {
-    await updateDoc(String(id), { title, description })
-    refetch()
-    setEditDoc(null)
-  }, [updateDoc, refetch])
+  const handleDocEditSave = useCallback(async (values: Record<string, string>) => {
+    if (!editDoc) return
+    try {
+      await updateDoc(String(editDoc.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
+      refetch()
+      setEditDoc(null)
+    } catch {
+      toast.error("Erreur lors de la modification")
+    }
+  }, [editDoc, updateDoc, refetch])
 
   // Création document
   const handleCreate = useCallback(async (title: string, description: string) => {
@@ -297,23 +297,14 @@ export default function ChapterPage() {
   }, [])
 
   const handleTsEditSave = useCallback(async (id: number, title: string, periodiciteId: number) => {
-    await updateTs(String(id), { title, periodicite_id: periodiciteId })
-    tsRefetch()
-    setEditSheet(null)
+    try {
+      await updateTs(String(id), { title, periodicite_id: periodiciteId })
+      tsRefetch()
+      setEditSheet(null)
+    } catch {
+      toast.error("Erreur lors de la modification")
+    }
   }, [updateTs, tsRefetch])
-
-  // Suppression feuille de suivi
-  const handleTsDeleteClick = useCallback((e: React.MouseEvent, sheet: TrackingSheet) => {
-    e.stopPropagation()
-    setDeleteSheet(sheet)
-  }, [])
-
-  const handleTsDeleteConfirm = useCallback(async () => {
-    if (!deleteSheet) return
-    await removeTs(String(deleteSheet.id))
-    tsRefetch()
-    setDeleteSheet(null)
-  }, [deleteSheet, removeTs, tsRefetch])
 
   // Export PDF feuille de signature
   const handleSsExport = useCallback((e: React.MouseEvent, sheet: SignatureSheet) => {
@@ -327,24 +318,16 @@ export default function ChapterPage() {
     setEditSigSheet(sheet)
   }, [])
 
-  const handleSsEditSave = useCallback(async (id: number, title: string, description: string) => {
-    await updateSs(String(id), { title, description })
-    ssRefetch()
-    setEditSigSheet(null)
-  }, [updateSs, ssRefetch])
-
-  // Suppression feuille de signature
-  const handleSsDeleteClick = useCallback((e: React.MouseEvent, sheet: SignatureSheet) => {
-    e.stopPropagation()
-    setDeleteSigSheet(sheet)
-  }, [])
-
-  const handleSsDeleteConfirm = useCallback(async () => {
-    if (!deleteSigSheet) return
-    await removeSs(String(deleteSigSheet.id))
-    ssRefetch()
-    setDeleteSigSheet(null)
-  }, [deleteSigSheet, removeSs, ssRefetch])
+  const handleSsEditSave = useCallback(async (values: Record<string, string>) => {
+    if (!editSigSheet) return
+    try {
+      await updateSs(String(editSigSheet.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
+      ssRefetch()
+      setEditSigSheet(null)
+    } catch {
+      toast.error("Erreur lors de la modification")
+    }
+  }, [editSigSheet, updateSs, ssRefetch])
 
   // Création intercalaire
   const handleCreateIntercalaire = useCallback(async (title: string, description: string) => {
@@ -368,24 +351,45 @@ export default function ChapterPage() {
     setEditIntercalaire(page)
   }, [])
 
-  const handleGpEditSave = useCallback(async (id: number, title: string, description: string) => {
-    await updateGp(String(id), { title, description })
-    gpRefetch()
-    setEditIntercalaire(null)
-  }, [updateGp, gpRefetch])
+  const handleGpEditSave = useCallback(async (values: Record<string, string>) => {
+    if (!editIntercalaire) return
+    try {
+      await updateGp(String(editIntercalaire.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
+      gpRefetch()
+      setEditIntercalaire(null)
+    } catch {
+      toast.error("Erreur lors de la modification")
+    }
+  }, [editIntercalaire, updateGp, gpRefetch])
 
-  // Suppression intercalaire
-  const handleGpDeleteClick = useCallback((e: React.MouseEvent, page: Intercalaire) => {
+  // Suppression générique
+  const handleDeleteClick = useCallback((e: React.MouseEvent, item: { title: string; id: number }, kind: "document" | "tracking_sheet" | "signature_sheet" | "intercalaire") => {
     e.stopPropagation()
-    setDeleteIntercalaire(page)
+    setDeleteItem({ item, kind })
   }, [])
 
-  const handleGpDeleteConfirm = useCallback(async () => {
-    if (!deleteIntercalaire) return
-    await removeGp(String(deleteIntercalaire.id))
-    gpRefetch()
-    setDeleteIntercalaire(null)
-  }, [deleteIntercalaire, removeGp, gpRefetch])
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteItem) return
+    try {
+      const { item, kind } = deleteItem
+      if (kind === "document") {
+        await remove(String(item.id))
+        refetch()
+      } else if (kind === "tracking_sheet") {
+        await removeTs(String(item.id))
+        tsRefetch()
+      } else if (kind === "signature_sheet") {
+        await removeSs(String(item.id))
+        ssRefetch()
+      } else {
+        await removeGp(String(item.id))
+        gpRefetch()
+      }
+      setDeleteItem(null)
+    } catch {
+      toast.error("Erreur lors de la suppression")
+    }
+  }, [deleteItem, remove, removeTs, removeSs, removeGp, refetch, tsRefetch, ssRefetch, gpRefetch])
 
   // Édition du chapitre
   const handleChapterSave = useCallback(async (label: string, description: string, icon: string) => {
@@ -404,18 +408,16 @@ export default function ChapterPage() {
     navigate(classeurId ? `/classeurs/${classeurId}` : "/")
   }, [chapterId, removeChapter, navigate])
 
-  // Suppression
-  const handleDeleteClick = useCallback((e: React.MouseEvent, doc: Doc) => {
-    e.stopPropagation()
-    setDeleteDoc(doc)
-  }, [])
-
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteDoc) return
-    await remove(String(deleteDoc.id))
-    refetch()
-    setDeleteDoc(null)
-  }, [deleteDoc, remove, refetch])
+  const deleteDialogConfig = useMemo(() => {
+    if (!deleteItem) return { title: "", sr: "" }
+    const labels: Record<string, { title: string; sr: string }> = {
+      document: { title: "Supprimer le document", sr: "Confirmer la suppression du document" },
+      tracking_sheet: { title: "Supprimer la feuille de suivi", sr: "Confirmer la suppression de la feuille de suivi" },
+      signature_sheet: { title: "Supprimer la feuille de signature", sr: "Confirmer la suppression de la feuille de signature" },
+      intercalaire: { title: "Supprimer l'intercalaire", sr: "Confirmer la suppression de l'intercalaire" },
+    }
+    return labels[deleteItem.kind]
+  }, [deleteItem])
 
   if (chapterLoading) {
     return (
@@ -500,7 +502,7 @@ export default function ChapterPage() {
                       establishment={establishment}
                       onExport={handleExport}
                       onEdit={handleDocEditClick}
-                      onDelete={handleDeleteClick}
+                      onDelete={(e, d) => handleDeleteClick(e, d, "document")}
                     />
                   ) : item.kind === "tracking_sheet" ? (
                     <TrackingSheetCard
@@ -514,7 +516,7 @@ export default function ChapterPage() {
                       periodicite={periodicites.find((p) => p.id === (item.data as TrackingSheet).periodicite_id)}
                       onExport={handleTsExport}
                       onEdit={handleTsEditClick}
-                      onDelete={handleTsDeleteClick}
+                      onDelete={(e, s) => handleDeleteClick(e, s, "tracking_sheet")}
                     />
                   ) : item.kind === "signature_sheet" ? (
                     <SignatureSheetCard
@@ -527,7 +529,7 @@ export default function ChapterPage() {
                       establishment={establishment}
                       onExport={handleSsExport}
                       onEdit={handleSsEditClick}
-                      onDelete={handleSsDeleteClick}
+                      onDelete={(e, s) => handleDeleteClick(e, s, "signature_sheet")}
                     />
                   ) : (
                     <IntercalaireCard
@@ -540,7 +542,7 @@ export default function ChapterPage() {
                       establishment={establishment}
                       onExport={handleGpExport}
                       onEdit={handleGpEditClick}
-                      onDelete={handleGpDeleteClick}
+                      onDelete={(e, p) => handleDeleteClick(e, p, "intercalaire")}
                     />
                   )
                 )}
@@ -653,15 +655,25 @@ export default function ChapterPage() {
         onCreateIntercalaire={handleCreateIntercalaire}
       />
 
-      <EditDocumentDialog
-        doc={editDoc}
+      {/* Dialog d'édition document — générique */}
+      <EditItemDialog
+        open={editDoc !== null}
+        dialogTitle="Modifier le document"
+        srDescription="Modifier le titre et la description du document"
+        fields={[
+          { key: "title", label: "Titre", placeholder: "Titre du document", initialValue: editDoc?.title ?? "" },
+          { key: "description", label: "Description", placeholder: "Description (optionnel)", initialValue: editDoc?.description ?? "" },
+        ]}
         onClose={() => setEditDoc(null)}
         onSave={handleDocEditSave}
       />
 
-      <DeleteDocumentDialog
-        doc={deleteDoc}
-        onClose={() => setDeleteDoc(null)}
+      {/* Dialog suppression générique */}
+      <DeleteItemDialog
+        item={deleteItem?.item ?? null}
+        dialogTitle={deleteDialogConfig.title}
+        srDescription={deleteDialogConfig.sr}
+        onClose={() => setDeleteItem(null)}
         onConfirm={handleDeleteConfirm}
       />
 
@@ -671,34 +683,30 @@ export default function ChapterPage() {
         onSave={handleTsEditSave}
       />
 
-      <DeleteTrackingSheetDialog
-        sheet={deleteSheet}
-        onClose={() => setDeleteSheet(null)}
-        onConfirm={handleTsDeleteConfirm}
-      />
-
-      <EditSignatureSheetDialog
-        sheet={editSigSheet}
+      {/* Dialog d'édition feuille de signature — générique */}
+      <EditItemDialog
+        open={editSigSheet !== null}
+        dialogTitle="Modifier la feuille de signature"
+        srDescription="Modifier le titre de la feuille de signature"
+        fields={[
+          { key: "title", label: "Titre", placeholder: "Titre de la feuille de signature", initialValue: editSigSheet?.title ?? "" },
+          { key: "description", label: "Description", placeholder: "Description (optionnel)", initialValue: editSigSheet?.description ?? "" },
+        ]}
         onClose={() => setEditSigSheet(null)}
         onSave={handleSsEditSave}
       />
 
-      <DeleteSignatureSheetDialog
-        sheet={deleteSigSheet}
-        onClose={() => setDeleteSigSheet(null)}
-        onConfirm={handleSsDeleteConfirm}
-      />
-
-      <EditIntercalaireDialog
-        page={editIntercalaire}
+      {/* Dialog d'édition intercalaire — générique */}
+      <EditItemDialog
+        open={editIntercalaire !== null}
+        dialogTitle="Modifier l'intercalaire"
+        srDescription="Modifier le titre et la description de l'intercalaire"
+        fields={[
+          { key: "title", label: "Titre", placeholder: "Titre de l'intercalaire", initialValue: editIntercalaire?.title ?? "" },
+          { key: "description", label: "Description", placeholder: "Description (optionnel)", initialValue: editIntercalaire?.description ?? "" },
+        ]}
         onClose={() => setEditIntercalaire(null)}
         onSave={handleGpEditSave}
-      />
-
-      <DeleteIntercalaireDialog
-        page={deleteIntercalaire}
-        onClose={() => setDeleteIntercalaire(null)}
-        onConfirm={handleGpDeleteConfirm}
       />
 
       <EditChapterDialog

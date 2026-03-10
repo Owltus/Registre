@@ -1,23 +1,27 @@
 import * as Dialog from "@radix-ui/react-dialog"
 import { Button } from "@/components/ui/button"
 import { Trash2, X } from "lucide-react"
-import type { Intercalaire } from "./types"
 
-interface DeleteIntercalaireDialogProps {
-  page: Intercalaire | null
+interface DeleteItemDialogProps {
+  /** null = fermé, sinon l'item à supprimer */
+  item: { title?: string } | null
+  /** Titre de la dialog (ex: "Supprimer le document") */
+  dialogTitle: string
+  /** Description accessible (sr-only) */
+  srDescription: string
   onClose: () => void
   onConfirm: () => void
 }
 
-export function DeleteIntercalaireDialog({ page, onClose, onConfirm }: DeleteIntercalaireDialogProps) {
+export function DeleteItemDialog({ item, dialogTitle, srDescription, onClose, onConfirm }: DeleteItemDialogProps) {
   return (
-    <Dialog.Root open={page !== null} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog.Root open={item !== null} onOpenChange={(open) => { if (!open) onClose() }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm border bg-background shadow-lg rounded-lg flex flex-col overflow-hidden focus:outline-none">
           <div className="flex items-center justify-between border-b px-6 py-4">
             <Dialog.Title className="text-lg font-semibold">
-              Supprimer l'intercalaire
+              {dialogTitle}
             </Dialog.Title>
             <Dialog.Close className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground">
               <X className="h-4 w-4" />
@@ -27,7 +31,7 @@ export function DeleteIntercalaireDialog({ page, onClose, onConfirm }: DeleteInt
 
           <div className="px-6 py-4">
             <p className="text-sm text-muted-foreground">
-              Voulez-vous vraiment supprimer <span className="font-medium text-foreground">{page?.title || "Sans titre"}</span> ? Cette action est irréversible.
+              Voulez-vous vraiment supprimer <span className="font-medium text-foreground">{item?.title || "Sans titre"}</span> ? Cette action est irréversible.
             </p>
           </div>
 
@@ -42,7 +46,7 @@ export function DeleteIntercalaireDialog({ page, onClose, onConfirm }: DeleteInt
           </div>
 
           <Dialog.Description className="sr-only">
-            Confirmer la suppression de l'intercalaire
+            {srDescription}
           </Dialog.Description>
         </Dialog.Content>
       </Dialog.Portal>

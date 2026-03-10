@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import { useParams, useNavigate, useSearchParams } from "react-router-dom"
-import { useQuery } from "@/lib/hooks/useQuery"
-import { useMutation } from "@/lib/hooks/useMutation"
-import type { ChapterRow, ClasseurRow } from "@/lib/navigation"
-import { DEFAULT_REGISTRY_NAME, buildEstablishment } from "@/lib/navigation"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useSearchParams } from "react-router-dom"
+import { toast } from "sonner"
+import { useDetailPage } from "@/lib/hooks/useDetailPage"
+import { usePageScale } from "@/lib/hooks/usePageScale"
 import { PrintPreview } from "@/components/print/PrintPreview"
 import { DocumentPages } from "@/components/print/DocumentPages"
 import { Input } from "@/components/ui/input"
@@ -24,33 +23,19 @@ interface Doc {
 }
 
 export default function DocumentDetail() {
-  const { id, chapterId, classeurId } = useParams<{ id: string; chapterId: string; classeurId: string }>()
-  const navigate = useNavigate()
+  const {
+    id, navigate, backPath, item: doc, loading, refetch,
+    classeurName, establishment, chapter, update,
+  } = useDetailPage<Doc>("documents")
+
   const [searchParams] = useSearchParams()
-  const { update } = useMutation("documents")
   const [previewOpen, setPreviewOpen] = useState(false)
   const previewScrollRef = useRef<HTMLDivElement>(null)
   const editorScrollRef = useRef<HTMLTextAreaElement>(null)
-  const roRef = useRef<ResizeObserver | null>(null)
   const isSyncing = useRef(false)
 
-  const backPath = classeurId && chapterId
-    ? `/classeurs/${classeurId}/chapitres/${chapterId}`
-    : chapterId ? `/chapitres/${chapterId}` : "/"
-
-  const filters = useMemo(() => ({ id: Number(id) }), [id])
-  const { data: docs, loading, refetch } = useQuery<Doc>("documents", filters)
-  const doc = docs[0] ?? null
-
-  const classeurFilters = useMemo(() => ({ id: Number(classeurId) }), [classeurId])
-  const { data: classeurRows } = useQuery<ClasseurRow>("classeurs", classeurFilters)
-  const classeurObj = classeurRows[0] ?? null
-  const classeurName = classeurObj?.name ?? DEFAULT_REGISTRY_NAME
-  const establishment = buildEstablishment(classeurObj)
-
-  const chapterFilters = useMemo(() => ({ id: Number(chapterId) }), [chapterId])
-  const { data: chapterRows } = useQuery<ChapterRow>("chapters", chapterFilters)
-  const chapter = chapterRows[0] ?? null
+  // Scale pour l'aperçu A4 (mode width pour les pages scrollables)
+  const { containerRef: previewRefCallback, scale } = usePageScale("width")
 
   const [editing, setEditing] = useState(searchParams.get("edit") === "1")
   const [editTitle, setEditTitle] = useState("")
@@ -59,9 +44,6 @@ export default function DocumentDetail() {
 
   // Contenu debounced pour l'aperçu A4 (évite des re-paginations à chaque frappe)
   const [debouncedContent, setDebouncedContent] = useState("")
-
-  // Scaling dynamique des pages A4 selon la largeur du panneau
-  const [scale, setScale] = useState(0.5)
 
   // Synchroniser le state local quand le document est chargé
   useEffect(() => {
@@ -80,34 +62,27 @@ export default function DocumentDetail() {
     return () => clearTimeout(timer)
   }, [editContent])
 
-  // Ref callback pour attacher le ResizeObserver au bon conteneur
-  const previewRefCallback = useCallback((node: HTMLDivElement | null) => {
+  // Ref combiné pour le scroll synchronisé ET le ResizeObserver
+  const combinedPreviewRef = useCallback((node: HTMLDivElement | null) => {
     previewScrollRef.current = node
-    if (roRef.current) {
-      roRef.current.disconnect()
-      roRef.current = null
-    }
-    if (!node) return
-    const ro = new ResizeObserver((entries) => {
-      const width = entries[0].contentRect.width
-      const pageWidthPx = 210 * 3.7795
-      const padding = 48
-      setScale(Math.min(1, (width - padding) / pageWidthPx))
-    })
-    ro.observe(node)
-    roRef.current = ro
-  }, [])
+    previewRefCallback(node)
+  }, [previewRefCallback])
 
   const handleSave = async () => {
     if (!id) return
-    await update(id, {
-      title: editTitle.trim() || "Sans titre",
-      description: editDescription.trim(),
-      content: editContent,
-      updated_at: new Date().toISOString(),
-    })
-    refetch()
-    setEditing(false)
+    try {
+      await update(id, {
+        title: editTitle.trim() || "Sans titre",
+        description: editDescription.trim(),
+        content: editContent,
+        updated_at: new Date().toISOString(),
+      })
+      refetch()
+      setEditing(false)
+      toast.success("Document enregistré")
+    } catch {
+      toast.error("Erreur lors de la sauvegarde")
+    }
   }
 
   const handleExport = () => {
@@ -276,7 +251,7 @@ export default function DocumentDetail() {
         <div className="flex flex-1 min-h-0">
           {/* Aperçu A4 temps réel (gauche) */}
           <div
-            ref={previewRefCallback}
+            ref={combinedPreviewRef}
             onScroll={() => syncScroll("preview")}
             className="w-1/2 overflow-y-auto border-r border-border bg-muted/30"
           >

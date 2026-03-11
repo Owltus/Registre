@@ -2,13 +2,39 @@ use crate::error::AppError;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::SystemTime;
 use tauri::State;
 
 // ── Structs serde pour l'export/import JSON ────────────────────────
 
 #[derive(Serialize, Deserialize)]
+struct MetadataSchema {
+    chapters: String,
+    items: String,
+    periodicite_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MetadataPeriodicite {
+    id: i64,
+    label: String,
+    nombre: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MetadataJson {
+    description: String,
+    generated_at: String,
+    note: String,
+    schema: MetadataSchema,
+    periodicites: Vec<MetadataPeriodicite>,
+}
+
+#[derive(Serialize, Deserialize)]
 struct ClasseurJson {
     format_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    _metadata: Option<MetadataJson>,
     classeur: ClasseurData,
     chapters: Vec<ChapterJson>,
 }
@@ -222,6 +248,61 @@ pub async fn export_classeur_json(
             for r in rows { if let Ok((cid, item)) = r { items_by_chapter.entry(cid).or_default().push(item); } }
         }
 
+        // Charger les périodicités depuis la DB
+        let mut perio_stmt = conn
+            .prepare("SELECT id, label, nombre FROM periodicites ORDER BY id")
+            .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+        let periodicites: Vec<MetadataPeriodicite> = perio_stmt
+            .query_map([], |row| {
+                Ok(MetadataPeriodicite {
+                    id: row.get(0)?,
+                    label: row.get(1)?,
+                    nombre: row.get(2)?,
+                })
+            })
+            .map_err(|e| AppError::DatabaseError(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| AppError::DatabaseError(format!("periodicites : {}", e)))?;
+
+        // Générer le timestamp ISO 8601 UTC
+        let generated_at = {
+            let dur = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default();
+            let secs = dur.as_secs();
+            // Calcul date/heure UTC à partir du timestamp Unix
+            let days = secs / 86400;
+            let time_of_day = secs % 86400;
+            let hours = time_of_day / 3600;
+            let minutes = (time_of_day % 3600) / 60;
+            let seconds = time_of_day % 60;
+            // Algorithme civil_from_days (Howard Hinnant)
+            let z = days as i64 + 719468;
+            let era = z / 146097;
+            let doe = z - era * 146097;
+            let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+            let y = yoe + era * 400;
+            let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            let mp = (5 * doy + 2) / 153;
+            let d = doy - (153 * mp + 2) / 5 + 1;
+            let m = if mp < 10 { mp + 3 } else { mp - 9 };
+            let y = if m <= 2 { y + 1 } else { y };
+            format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, d, hours, minutes, seconds)
+        };
+
+        // Construire le bloc _metadata
+        let metadata = MetadataJson {
+            description: "Registre de sécurité ERP — classeur exporté depuis l'application Registre de Sécurité".to_string(),
+            generated_at,
+            note: "Ce bloc _metadata est informatif et ignoré lors de l'import.".to_string(),
+            schema: MetadataSchema {
+                chapters: "Chaque chapitre représente une section du registre de sécurité ERP (établissement recevant du public).".to_string(),
+                items: "Chaque chapitre contient des items de 4 types : document (texte libre), tracking_sheet (fiche de suivi périodique), signature_sheet (fiche d'émargement), intercalaire (page de séparation).".to_string(),
+                periodicite_id: "Référence vers une périodicité de vérification. Utilisé par les fiches de suivi (tracking_sheets).".to_string(),
+            },
+            periodicites,
+        };
+
         // Assembler les chapitres avec leurs items
         let mut slug_counts: HashMap<String, u32> = HashMap::new();
         let mut chapter_jsons = Vec::new();
@@ -250,6 +331,7 @@ pub async fn export_classeur_json(
 
         let export = ClasseurJson {
             format_version: 1,
+            _metadata: Some(metadata),
             classeur: ClasseurData { name, icon, etablissement, etablissement_complement: complement },
             chapters: chapter_jsons,
         };

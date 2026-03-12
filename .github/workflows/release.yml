@@ -135,29 +135,30 @@ jobs:
 
           # Construire le body
           REPO="${{ github.repository }}"
-          cat > release-notes.md <<EOF
-# Registre
-
-## Telecharger
-
-### Windows
-
-- [registre-${VERSION}-setup.exe](https://github.com/${REPO}/releases/download/v${VERSION}/registre-${VERSION}-setup.exe) — Installeur
-- [registre.exe](https://github.com/${REPO}/releases/download/v${VERSION}/registre.exe) — Portable (sans installation)
-
-### macOS
-
-- [registre-${VERSION}.dmg](https://github.com/${REPO}/releases/download/v${VERSION}/registre-${VERSION}.dmg) — Installeur
-
-### Linux
-
-- [registre-${VERSION}.deb](https://github.com/${REPO}/releases/download/v${VERSION}/registre-${VERSION}.deb) — Debian / Ubuntu
-- [registre-${VERSION}.AppImage](https://github.com/${REPO}/releases/download/v${VERSION}/registre-${VERSION}.AppImage) — Toutes distributions
-
----
-
-## Notes de mise a jour
-EOF
+          DL="https://github.com/${REPO}/releases/download/v${VERSION}"
+          {
+            echo "# Registre"
+            echo ""
+            echo "## Telecharger"
+            echo ""
+            echo "### Windows"
+            echo ""
+            echo "- [registre-${VERSION}-setup.exe](${DL}/registre-${VERSION}-setup.exe) — Installeur"
+            echo "- [registre.exe](${DL}/registre.exe) — Portable (sans installation)"
+            echo ""
+            echo "### macOS"
+            echo ""
+            echo "- [registre-${VERSION}.dmg](${DL}/registre-${VERSION}.dmg) — Installeur"
+            echo ""
+            echo "### Linux"
+            echo ""
+            echo "- [registre-${VERSION}.deb](${DL}/registre-${VERSION}.deb) — Debian / Ubuntu"
+            echo "- [registre-${VERSION}.AppImage](${DL}/registre-${VERSION}.AppImage) — Toutes distributions"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Notes de mise a jour"
+          } > release-notes.md
 
           if [ -n "$FEATS" ]; then
             printf "\n### Nouveautes\n\n" >> release-notes.md

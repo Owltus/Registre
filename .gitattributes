@@ -1,0 +1,4 @@
+# Forcer LF pour les fichiers qui doivent tourner sur Linux (CI)
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf

@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 use std::time::SystemTime;
 use tauri::State;
@@ -170,6 +170,7 @@ pub struct MergeResult {
     pub updated: u32,
     pub unchanged: u32,
     pub skipped: u32,
+    pub deleted: u32,
     pub warnings: Vec<String>,
 }
 
@@ -179,7 +180,8 @@ pub struct MergePreviewItem {
     pub kind: String,
     pub title: String,
     pub chapter_label: String,
-    pub detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -189,6 +191,7 @@ pub struct MergePreview {
     pub total_update: u32,
     pub total_unchanged: u32,
     pub total_skip: u32,
+    pub total_delete: u32,
     pub warnings: Vec<String>,
 }
 
@@ -637,6 +640,7 @@ struct LocalItem {
     uuid: Option<String>,
     title: String,
     chapter_id: String,
+    kind: String,
     deleted_at: Option<String>,
     updated_at: Option<String>,
     // Champs spécifiques pour comparaison
@@ -667,6 +671,7 @@ fn load_local_items(conn: &rusqlite::Connection, classeur_id: i64) -> Result<Vec
     )).map_err(|e| AppError::DatabaseError(e.to_string()))?;
     let rows = s.query_map([], |r| Ok(LocalItem {
         id: r.get(0)?, uuid: r.get(1)?, title: r.get(2)?, chapter_id: r.get(3)?,
+        kind: "document".to_string(),
         deleted_at: r.get(4)?, updated_at: r.get(5)?, description: r.get(6)?, content: r.get(7)?,
         periodicite_id: None, nombre: None,
     })).map_err(|e| AppError::DatabaseError(e.to_string()))?;
@@ -678,6 +683,7 @@ fn load_local_items(conn: &rusqlite::Connection, classeur_id: i64) -> Result<Vec
     )).map_err(|e| AppError::DatabaseError(e.to_string()))?;
     let rows = s.query_map([], |r| Ok(LocalItem {
         id: r.get(0)?, uuid: r.get(1)?, title: r.get(2)?, chapter_id: r.get(3)?,
+        kind: "tracking_sheet".to_string(),
         deleted_at: r.get(4)?, updated_at: r.get(5)?, description: String::new(), content: String::new(),
         periodicite_id: r.get(6)?, nombre: None,
     })).map_err(|e| AppError::DatabaseError(e.to_string()))?;
@@ -689,6 +695,7 @@ fn load_local_items(conn: &rusqlite::Connection, classeur_id: i64) -> Result<Vec
     )).map_err(|e| AppError::DatabaseError(e.to_string()))?;
     let rows = s.query_map([], |r| Ok(LocalItem {
         id: r.get(0)?, uuid: r.get(1)?, title: r.get(2)?, chapter_id: r.get(3)?,
+        kind: "signature_sheet".to_string(),
         deleted_at: r.get(4)?, updated_at: r.get(5)?, description: r.get(6)?, content: String::new(),
         periodicite_id: None, nombre: r.get(7)?,
     })).map_err(|e| AppError::DatabaseError(e.to_string()))?;
@@ -700,6 +707,7 @@ fn load_local_items(conn: &rusqlite::Connection, classeur_id: i64) -> Result<Vec
     )).map_err(|e| AppError::DatabaseError(e.to_string()))?;
     let rows = s.query_map([], |r| Ok(LocalItem {
         id: r.get(0)?, uuid: r.get(1)?, title: r.get(2)?, chapter_id: r.get(3)?,
+        kind: "intercalaire".to_string(),
         deleted_at: r.get(4)?, updated_at: r.get(5)?, description: r.get(6)?, content: String::new(),
         periodicite_id: None, nombre: None,
     })).map_err(|e| AppError::DatabaseError(e.to_string()))?;
@@ -711,17 +719,20 @@ fn load_local_items(conn: &rusqlite::Connection, classeur_id: i64) -> Result<Vec
 /// Logique de merge partagée entre preview et exécution.
 /// Si dry_run=true, ne modifie pas la base et retourne le détail.
 /// Si dry_run=false, applique les changements et retourne le résumé.
+/// Si replace=true, les éléments locaux absents du JSON importé sont soft-deleted.
 fn do_merge(
     conn: &rusqlite::Connection,
     classeur_id: i64,
     data: &ClasseurJson,
     dry_run: bool,
+    replace: bool,
 ) -> Result<(MergeResult, Vec<MergePreviewItem>), AppError> {
-    let mut result = MergeResult { inserted: 0, updated: 0, unchanged: 0, skipped: 0, warnings: Vec::new() };
+    let mut result = MergeResult { inserted: 0, updated: 0, unchanged: 0, skipped: 0, deleted: 0, warnings: Vec::new() };
     let mut preview_items = Vec::new();
 
     // Charger chapitres existants (non supprimés pour le merge, tous pour UUID matching)
-    let mut existing_chapters: HashMap<String, (i64, String, String, String, Option<String>)> = HashMap::new(); // slug → (id, label, icon, desc, uuid)
+    // slug → (id, label, icon, desc, uuid)
+    let mut existing_chapters: HashMap<String, (i64, String, String, String, Option<String>)> = HashMap::new();
     let mut chapters_by_uuid: HashMap<String, (i64, String, String, String, Option<String>)> = HashMap::new();
     {
         let mut stmt = conn
@@ -756,6 +767,10 @@ fn do_merge(
         }
     }
 
+    // Sets pour le mode replace : suivre les chapitres et items matchés
+    let mut matched_chapter_ids: HashSet<i64> = HashSet::new();
+    let mut matched_item_ids: HashSet<i64> = HashSet::new();
+
     let mut next_ch_order: i64 = conn
         .query_row(
             "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM chapters WHERE classeur_id = ?1 AND deleted_at IS NULL",
@@ -780,6 +795,7 @@ fn do_merge(
 
         if let Some((existing_id, existing_label, existing_icon, existing_desc, _)) = matched_ch {
             ch_id = existing_id;
+            matched_chapter_ids.insert(ch_id);
             if existing_label != ch_json.label || existing_icon != ch_json.icon || existing_desc != ch_json.description {
                 if !dry_run {
                     conn.execute(
@@ -791,7 +807,7 @@ fn do_merge(
                 preview_items.push(MergePreviewItem {
                     action: "update".to_string(), kind: "chapter".to_string(),
                     title: ch_json.label.clone(), chapter_label: ch_json.label.clone(),
-                    detail: "métadonnées du chapitre modifiées".to_string(),
+                    icon: Some(ch_json.icon.clone()),
                 });
             } else {
                 result.unchanged += 1;
@@ -812,11 +828,12 @@ fn do_merge(
             preview_items.push(MergePreviewItem {
                 action: "insert".to_string(), kind: "chapter".to_string(),
                 title: ch_json.label.clone(), chapter_label: ch_json.label.clone(),
-                detail: "nouveau chapitre".to_string(),
+                icon: Some(ch_json.icon.clone()),
             });
         }
 
         let ch_id_str = ch_id.to_string();
+        let ch_icon = &ch_json.icon;
 
         for item in &ch_json.items {
             // Validation : kind inconnu → warning + skip
@@ -830,7 +847,7 @@ fn do_merge(
                     preview_items.push(MergePreviewItem {
                         action: "skip".to_string(), kind: item.kind.clone(),
                         title: item.title.clone(), chapter_label: ch_label.clone(),
-                        detail: format!("type inconnu '{}'", unknown),
+                        icon: Some(ch_icon.clone()),
                     });
                     continue;
                 }
@@ -845,7 +862,7 @@ fn do_merge(
                 preview_items.push(MergePreviewItem {
                     action: "skip".to_string(), kind: item.kind.clone(),
                     title: "(sans titre)".to_string(), chapter_label: ch_label.clone(),
-                    detail: "titre manquant".to_string(),
+                    icon: Some(ch_icon.clone()),
                 });
                 continue;
             }
@@ -865,44 +882,73 @@ fn do_merge(
             });
 
             if let Some(local) = matched_local {
-                // Item soft-deleted → ne pas recréer
+                matched_item_ids.insert(local.id);
+
+                // Item soft-deleted localement
                 if local.deleted_at.is_some() {
-                    result.skipped += 1;
-                    preview_items.push(MergePreviewItem {
-                        action: "skip".to_string(), kind: item.kind.clone(),
-                        title: item.title.clone(), chapter_label: ch_label.clone(),
-                        detail: "supprimé localement".to_string(),
-                    });
+                    if replace {
+                        // En mode replace, on restaure l'item supprimé
+                        if !dry_run {
+                            let table = match item.kind.as_str() {
+                                "document" => "documents",
+                                "tracking_sheet" => "tracking_sheets",
+                                "signature_sheet" => "signature_sheets",
+                                "intercalaire" => "intercalaires",
+                                _ => { continue; }
+                            };
+                            conn.execute(
+                                &format!("UPDATE {} SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ?1", table),
+                                [local.id],
+                            ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
+                        }
+                        result.inserted += 1;
+                        preview_items.push(MergePreviewItem {
+                            action: "insert".to_string(), kind: item.kind.clone(),
+                            title: item.title.clone(), chapter_label: ch_label.clone(),
+                            icon: Some(ch_icon.clone()),
+                        });
+                    } else {
+                        result.skipped += 1;
+                        preview_items.push(MergePreviewItem {
+                            action: "skip".to_string(), kind: item.kind.clone(),
+                            title: item.title.clone(), chapter_label: ch_label.clone(),
+                            icon: Some(ch_icon.clone()),
+                        });
+                    }
                     continue;
                 }
 
-                // Last-Write-Wins : comparer updated_at
-                let json_newer = match (&item.updated_at, &local.updated_at) {
-                    (Some(json_ts), Some(local_ts)) => json_ts > local_ts,
-                    (Some(_), None) => true,
-                    _ => true, // Si pas de timestamp, on considère le JSON comme plus récent (backward compat)
-                };
-
-                if !json_newer {
-                    result.unchanged += 1;
-                    continue;
+                // En mode replace, on ignore les timestamps : le JSON est la source de vérité.
+                // En mode fusion, Last-Write-Wins via updated_at.
+                if !replace {
+                    let json_newer = match (&item.updated_at, &local.updated_at) {
+                        (Some(json_ts), Some(local_ts)) => json_ts > local_ts,
+                        (Some(_), None) => true,
+                        _ => true,
+                    };
+                    if !json_newer {
+                        result.unchanged += 1;
+                        continue;
+                    }
                 }
 
-                // Comparer les champs selon le kind
+                // Comparer tous les champs selon le kind
                 let changed = match item.kind.as_str() {
                     "document" => {
                         let new_desc = item.description.as_deref().unwrap_or("");
                         let new_content = item.content.as_deref().unwrap_or("");
-                        local.description != new_desc || local.content != new_content
+                        local.title != item.title || local.description != new_desc || local.content != new_content
                     }
-                    "tracking_sheet" => local.periodicite_id != item.periodicite_id,
+                    "tracking_sheet" => {
+                        local.title != item.title || local.periodicite_id != item.periodicite_id
+                    }
                     "signature_sheet" => {
                         let new_desc = item.description.as_deref().unwrap_or("");
-                        local.description != new_desc || local.nombre != item.nombre
+                        local.title != item.title || local.description != new_desc || local.nombre != item.nombre
                     }
                     "intercalaire" => {
                         let new_desc = item.description.as_deref().unwrap_or("");
-                        local.description != new_desc
+                        local.title != item.title || local.description != new_desc
                     }
                     _ => false,
                 };
@@ -912,26 +958,26 @@ fn do_merge(
                         match item.kind.as_str() {
                             "document" => {
                                 conn.execute(
-                                    "UPDATE documents SET description = ?1, content = ?2, updated_at = datetime('now') WHERE id = ?3",
-                                    rusqlite::params![item.description.as_deref().unwrap_or(""), item.content.as_deref().unwrap_or(""), local.id],
+                                    "UPDATE documents SET title = ?1, description = ?2, content = ?3, updated_at = datetime('now') WHERE id = ?4",
+                                    rusqlite::params![item.title, item.description.as_deref().unwrap_or(""), item.content.as_deref().unwrap_or(""), local.id],
                                 ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
                             }
                             "tracking_sheet" => {
                                 conn.execute(
-                                    "UPDATE tracking_sheets SET periodicite_id = ?1, updated_at = datetime('now') WHERE id = ?2",
-                                    rusqlite::params![item.periodicite_id, local.id],
+                                    "UPDATE tracking_sheets SET title = ?1, periodicite_id = ?2, updated_at = datetime('now') WHERE id = ?3",
+                                    rusqlite::params![item.title, item.periodicite_id, local.id],
                                 ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
                             }
                             "signature_sheet" => {
                                 conn.execute(
-                                    "UPDATE signature_sheets SET description = ?1, nombre = ?2, updated_at = datetime('now') WHERE id = ?3",
-                                    rusqlite::params![item.description.as_deref().unwrap_or(""), item.nombre, local.id],
+                                    "UPDATE signature_sheets SET title = ?1, description = ?2, nombre = ?3, updated_at = datetime('now') WHERE id = ?4",
+                                    rusqlite::params![item.title, item.description.as_deref().unwrap_or(""), item.nombre, local.id],
                                 ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
                             }
                             "intercalaire" => {
                                 conn.execute(
-                                    "UPDATE intercalaires SET description = ?1, updated_at = datetime('now') WHERE id = ?2",
-                                    rusqlite::params![item.description.as_deref().unwrap_or(""), local.id],
+                                    "UPDATE intercalaires SET title = ?1, description = ?2, updated_at = datetime('now') WHERE id = ?3",
+                                    rusqlite::params![item.title, item.description.as_deref().unwrap_or(""), local.id],
                                 ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
                             }
                             _ => {}
@@ -941,7 +987,7 @@ fn do_merge(
                     preview_items.push(MergePreviewItem {
                         action: "update".to_string(), kind: item.kind.clone(),
                         title: item.title.clone(), chapter_label: ch_label.clone(),
-                        detail: "contenu mis à jour".to_string(),
+                        icon: Some(ch_icon.clone()),
                     });
                 } else {
                     result.unchanged += 1;
@@ -982,9 +1028,71 @@ fn do_merge(
                 preview_items.push(MergePreviewItem {
                     action: "insert".to_string(), kind: item.kind.clone(),
                     title: item.title.clone(), chapter_label: ch_label.clone(),
-                    detail: "nouvel élément".to_string(),
+                    icon: Some(ch_icon.clone()),
                 });
             }
+        }
+    }
+
+    // Mode replace : soft-delete les chapitres et items locaux non matchés
+    if replace {
+        // Index chapter_id → (label, icon) pour les preview items
+        let mut ch_info_map: HashMap<String, (String, String)> = HashMap::new();
+        for (_slug, (id, label, icon, _, _)) in &existing_chapters {
+            ch_info_map.insert(id.to_string(), (label.clone(), icon.clone()));
+        }
+
+        // Soft-delete des items non matchés (non déjà supprimés)
+        for li in &local_items {
+            if li.deleted_at.is_some() { continue; }
+            if matched_item_ids.contains(&li.id) { continue; }
+
+            let table = match li.kind.as_str() {
+                "document" => "documents",
+                "tracking_sheet" => "tracking_sheets",
+                "signature_sheet" => "signature_sheets",
+                "intercalaire" => "intercalaires",
+                _ => continue,
+            };
+
+            if !dry_run {
+                conn.execute(
+                    &format!("UPDATE {} SET deleted_at = datetime('now') WHERE id = ?1", table),
+                    [li.id],
+                ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
+            }
+
+            let (ch_lbl, ch_ico) = ch_info_map.get(&li.chapter_id)
+                .cloned().unwrap_or_default();
+            result.deleted += 1;
+            preview_items.push(MergePreviewItem {
+                action: "delete".to_string(),
+                kind: li.kind.clone(),
+                title: li.title.clone(),
+                chapter_label: ch_lbl,
+                icon: Some(ch_ico),
+            });
+        }
+
+        // Soft-delete des chapitres non matchés (non déjà supprimés)
+        for (_slug, (id, label, icon, _, _)) in &existing_chapters {
+            if matched_chapter_ids.contains(id) { continue; }
+
+            if !dry_run {
+                conn.execute(
+                    "UPDATE chapters SET deleted_at = datetime('now') WHERE id = ?1",
+                    [*id],
+                ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
+            }
+
+            result.deleted += 1;
+            preview_items.push(MergePreviewItem {
+                action: "delete".to_string(),
+                kind: "chapter".to_string(),
+                title: label.clone(),
+                chapter_label: label.clone(),
+                icon: Some(icon.clone()),
+            });
         }
     }
 
@@ -1058,6 +1166,7 @@ pub async fn preview_merge_json(
     state: State<'_, AppState>,
     classeur_id: i64,
     path: String,
+    replace: bool,
 ) -> Result<MergePreview, AppError> {
     let db_path = state.db_path().to_string();
 
@@ -1072,7 +1181,7 @@ pub async fn preview_merge_json(
         )
         .map_err(|e| AppError::DatabaseError(format!("ouverture DB : {}", e)))?;
 
-        let (result, items) = do_merge(&conn, classeur_id, &data, true)?;
+        let (result, items) = do_merge(&conn, classeur_id, &data, true, replace)?;
 
         Ok::<MergePreview, AppError>(MergePreview {
             items,
@@ -1080,6 +1189,44 @@ pub async fn preview_merge_json(
             total_update: result.updated,
             total_unchanged: result.unchanged,
             total_skip: result.skipped,
+            total_delete: result.deleted,
+            warnings: result.warnings,
+        })
+    })
+    .await
+    .map_err(|e| AppError::Unknown(e.to_string()))??;
+
+    Ok(preview)
+}
+
+/// Prévisualise un merge depuis un contenu JSON (sans fichier sur disque).
+#[tauri::command]
+pub async fn preview_merge_json_from_content(
+    state: State<'_, AppState>,
+    classeur_id: i64,
+    content: String,
+    replace: bool,
+) -> Result<MergePreview, AppError> {
+    let db_path = state.db_path().to_string();
+
+    let preview = tokio::task::spawn_blocking(move || {
+        let data = parse_import_json(&content)?;
+
+        let conn = rusqlite::Connection::open_with_flags(
+            &db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .map_err(|e| AppError::DatabaseError(format!("ouverture DB : {}", e)))?;
+
+        let (result, items) = do_merge(&conn, classeur_id, &data, true, replace)?;
+
+        Ok::<MergePreview, AppError>(MergePreview {
+            items,
+            total_insert: result.inserted,
+            total_update: result.updated,
+            total_unchanged: result.unchanged,
+            total_skip: result.skipped,
+            total_delete: result.deleted,
             warnings: result.warnings,
         })
     })
@@ -1096,6 +1243,7 @@ pub async fn import_classeur_json(
     state: State<'_, AppState>,
     classeur_id: i64,
     path: String,
+    replace: bool,
 ) -> Result<MergeResult, AppError> {
     let db_path = state.db_path().to_string();
 
@@ -1118,14 +1266,14 @@ pub async fn import_classeur_json(
         conn.execute_batch("BEGIN")
             .map_err(|e| AppError::DatabaseError(e.to_string()))?;
 
-        let (result, _) = do_merge(&conn, classeur_id, &data, false)?;
+        let (result, _) = do_merge(&conn, classeur_id, &data, false, replace)?;
 
         // Nom source depuis le classeur JSON importé
         let source_name = data.classeur.name.clone();
 
         // Enregistrer dans l'historique uniquement si le merge a modifié des données
         // et que le snapshot n'existe pas déjà
-        let has_changes = result.inserted > 0 || result.updated > 0;
+        let has_changes = result.inserted > 0 || result.updated > 0 || result.deleted > 0;
         if has_changes && !already_in_history {
             conn.execute(
                 "INSERT INTO merge_history (classeur_id, source_name, inserted, updated, unchanged, skipped, snapshot_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -1134,6 +1282,55 @@ pub async fn import_classeur_json(
         }
 
         // Garder uniquement les 20 entrées les plus récentes
+        prune_merge_history(&conn, classeur_id)?;
+
+        conn.execute_batch("COMMIT")
+            .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+
+        Ok::<MergeResult, AppError>(result)
+    })
+    .await
+    .map_err(|e| AppError::Unknown(e.to_string()))??;
+
+    Ok(result)
+}
+
+/// Importe un contenu JSON dans un classeur existant avec merge intelligent (sans fichier sur disque).
+#[tauri::command]
+pub async fn import_classeur_json_from_content(
+    state: State<'_, AppState>,
+    classeur_id: i64,
+    content: String,
+    replace: bool,
+) -> Result<MergeResult, AppError> {
+    let db_path = state.db_path().to_string();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let data = parse_import_json(&content)?;
+
+        let conn = rusqlite::Connection::open_with_flags(
+            &db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+        )
+        .map_err(|e| AppError::DatabaseError(format!("ouverture DB : {}", e)))?;
+
+        let snapshot_json = do_export_json(&conn, classeur_id)?;
+        let already_in_history = snapshot_already_in_history(&conn, classeur_id, &snapshot_json)?;
+
+        conn.execute_batch("BEGIN")
+            .map_err(|e| AppError::DatabaseError(e.to_string()))?;
+
+        let (result, _) = do_merge(&conn, classeur_id, &data, false, replace)?;
+
+        let source_name = data.classeur.name.clone();
+        let has_changes = result.inserted > 0 || result.updated > 0 || result.deleted > 0;
+        if has_changes && !already_in_history {
+            conn.execute(
+                "INSERT INTO merge_history (classeur_id, source_name, inserted, updated, unchanged, skipped, snapshot_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                rusqlite::params![classeur_id, source_name, result.inserted, result.updated, result.unchanged, result.skipped, snapshot_json],
+            ).map_err(|e| AppError::DatabaseError(e.to_string()))?;
+        }
+
         prune_merge_history(&conn, classeur_id)?;
 
         conn.execute_batch("COMMIT")

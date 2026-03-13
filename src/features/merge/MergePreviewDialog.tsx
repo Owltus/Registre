@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
-import { X, Plus, RefreshCw, Minus, Equal, AlertTriangle } from "lucide-react"
+import { X, Plus, Pencil, Trash2, Minus, Equal, AlertTriangle, FileText, ClipboardList, Users, BookOpen } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getChapterIcon } from "@/lib/navigation"
 import type { MergePreview, MergePreviewItem } from "@/lib/exportMarkdown"
 
 interface MergePreviewDialogProps {
@@ -13,43 +15,74 @@ interface MergePreviewDialogProps {
 }
 
 const ACTION_CONFIG: Record<string, { label: string; icon: typeof Plus; className: string }> = {
-  insert:    { label: "Ajout",    icon: Plus,      className: "text-status-success" },
-  update:    { label: "Mise à jour", icon: RefreshCw, className: "text-status-warning" },
-  skip:      { label: "Ignoré",   icon: Minus,     className: "text-status-danger" },
-  unchanged: { label: "Inchangé", icon: Equal,      className: "text-muted-foreground" },
+  insert:    { label: "Créé",      icon: Plus,    className: "text-status-success" },
+  update:    { label: "Mis à jour", icon: Pencil,  className: "text-status-warning" },
+  delete:    { label: "Supprimé",  icon: Trash2,  className: "text-status-danger" },
+  skip:      { label: "Ignoré",    icon: Minus,   className: "text-status-danger" },
+  unchanged: { label: "Inchangé",  icon: Equal,   className: "text-muted-foreground" },
 }
 
-const KIND_LABELS: Record<string, string> = {
-  document: "Document",
-  tracking_sheet: "Fiche de suivi",
-  signature_sheet: "Fiche d'émargement",
-  intercalaire: "Intercalaire",
+const KIND_CONFIG: Record<string, { label: string; icon: LucideIcon }> = {
+  document:        { label: "Document",            icon: FileText },
+  tracking_sheet:  { label: "Fiche de suivi",      icon: ClipboardList },
+  signature_sheet: { label: "Fiche d'émargement",  icon: Users },
+  intercalaire:    { label: "Intercalaire",        icon: BookOpen },
+}
+
+interface ChapterGroup {
+  label: string
+  chapterAction: MergePreviewItem | null
+  items: MergePreviewItem[]
 }
 
 export function MergePreviewDialog({ open, onOpenChange, preview, loading, onConfirm }: MergePreviewDialogProps) {
   const [actionFilter, setActionFilter] = useState<string | null>(null)
 
-  // Grouper par chapitre, avec filtre par action
-  const grouped = useMemo(() => {
+  // Single-pass : séparer chapitres et contenu, grouper par chapitre, filtrer
+  const groups = useMemo(() => {
     if (!preview) return []
-    const filtered = actionFilter
-      ? preview.items.filter(item => item.action === actionFilter)
-      : preview.items
-    const map = new Map<string, MergePreviewItem[]>()
-    for (const item of filtered) {
-      const key = item.chapter_label || "Sans chapitre"
-      const list = map.get(key)
-      if (list) list.push(item)
-      else map.set(key, [item])
+
+    const map = new Map<string, ChapterGroup>()
+    const getGroup = (key: string) => {
+      let g = map.get(key)
+      if (!g) { g = { label: key, chapterAction: null, items: [] }; map.set(key, g) }
+      return g
     }
-    return Array.from(map.entries())
+
+    for (const item of preview.items) {
+      const key = item.chapter_label || "Sans chapitre"
+      const passesFilter = !actionFilter || item.action === actionFilter
+
+      if (item.kind === "chapter") {
+        const g = getGroup(key)
+        if (passesFilter) g.chapterAction = item
+      } else if (passesFilter) {
+        getGroup(key).items.push(item)
+      }
+    }
+
+    if (actionFilter) {
+      for (const [key, group] of map) {
+        if (!group.chapterAction && group.items.length === 0) map.delete(key)
+      }
+    }
+
+    return Array.from(map.values())
   }, [preview, actionFilter])
 
-  const hasChanges = preview ? (preview.total_insert + preview.total_update) > 0 : false
+  const hasChanges = preview ? (preview.total_insert + preview.total_update + preview.total_delete) > 0 : false
 
   const toggleFilter = (action: string) => {
     setActionFilter(prev => prev === action ? null : action)
   }
+
+  const badges: { key: string; count: number; label: string; colorClass: string; activeClass: string }[] = [
+    { key: "insert", count: preview?.total_insert ?? 0, label: "créé", colorClass: "text-status-success", activeClass: "bg-status-success/15 ring-1 ring-status-success/40" },
+    { key: "update", count: preview?.total_update ?? 0, label: "mis à jour", colorClass: "text-status-warning", activeClass: "bg-status-warning/15 ring-1 ring-status-warning/40" },
+    { key: "delete", count: preview?.total_delete ?? 0, label: "supprimé", colorClass: "text-status-danger", activeClass: "bg-status-danger/15 ring-1 ring-status-danger/40" },
+    { key: "unchanged", count: preview?.total_unchanged ?? 0, label: "inchangé", colorClass: "text-muted-foreground", activeClass: "bg-muted ring-1 ring-border" },
+    { key: "skip", count: preview?.total_skip ?? 0, label: "ignoré", colorClass: "text-status-danger", activeClass: "bg-status-danger/15 ring-1 ring-status-danger/40" },
+  ]
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -60,7 +93,7 @@ export function MergePreviewDialog({ open, onOpenChange, preview, loading, onCon
           {/* En-tête */}
           <div className="flex items-center justify-between border-b px-6 py-4">
             <Dialog.Title className="text-lg font-semibold">
-              Prévisualisation du merge
+              Prévisualisation de l'import
             </Dialog.Title>
             <Dialog.Close className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground">
               <X className="h-4 w-4" />
@@ -88,44 +121,20 @@ export function MergePreviewDialog({ open, onOpenChange, preview, loading, onCon
           {/* Résumé — badges cliquables pour filtrer */}
           {preview && (
             <div className="flex gap-2 px-6 py-3 border-b text-sm flex-wrap">
-              <button
-                type="button"
-                onClick={() => toggleFilter("insert")}
-                className={`font-medium px-2 py-0.5 rounded-md transition-colors text-status-success ${
-                  actionFilter === "insert" ? "bg-status-success/15 ring-1 ring-status-success/40" : "hover:bg-accent"
-                }`}
-              >
-                {preview.total_insert} ajout(s)
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleFilter("update")}
-                className={`font-medium px-2 py-0.5 rounded-md transition-colors text-status-warning ${
-                  actionFilter === "update" ? "bg-status-warning/15 ring-1 ring-status-warning/40" : "hover:bg-accent"
-                }`}
-              >
-                {preview.total_update} mise(s) à jour
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleFilter("unchanged")}
-                className={`font-medium px-2 py-0.5 rounded-md transition-colors text-muted-foreground ${
-                  actionFilter === "unchanged" ? "bg-muted ring-1 ring-border" : "hover:bg-accent"
-                }`}
-              >
-                {preview.total_unchanged} inchangé(s)
-              </button>
-              {preview.total_skip > 0 && (
-                <button
-                  type="button"
-                  onClick={() => toggleFilter("skip")}
-                  className={`font-medium px-2 py-0.5 rounded-md transition-colors text-status-danger ${
-                    actionFilter === "skip" ? "bg-status-danger/15 ring-1 ring-status-danger/40" : "hover:bg-accent"
-                  }`}
-                >
-                  {preview.total_skip} ignoré(s)
-                </button>
-              )}
+              {badges.map((b) => (
+                b.count > 0 || b.key === "insert" || b.key === "update" || b.key === "unchanged" ? (
+                  <button
+                    key={b.key}
+                    type="button"
+                    onClick={() => toggleFilter(b.key)}
+                    className={`font-medium px-2 py-0.5 rounded-md transition-colors ${b.colorClass} ${
+                      actionFilter === b.key ? b.activeClass : "hover:bg-accent"
+                    }`}
+                  >
+                    {b.count} {b.label}(s)
+                  </button>
+                ) : null
+              ))}
               {actionFilter && (
                 <button
                   type="button"
@@ -144,35 +153,55 @@ export function MergePreviewDialog({ open, onOpenChange, preview, loading, onCon
               <p className="text-sm text-muted-foreground">Chargement de la prévisualisation...</p>
             ) : preview.items.length === 0 ? (
               <p className="text-sm text-muted-foreground">Aucun élément dans le fichier importé.</p>
-            ) : grouped.length === 0 && actionFilter ? (
+            ) : groups.length === 0 && actionFilter ? (
               <p className="text-sm text-muted-foreground">Aucun élément pour ce filtre.</p>
             ) : (
               <div className="flex flex-col gap-4">
-                {grouped.map(([chapterLabel, items]) => (
-                  <div key={chapterLabel}>
-                    <h3 className="text-sm font-semibold mb-2">{chapterLabel}</h3>
-                    <div className="flex flex-col gap-1">
-                      {items.map((item, i) => {
-                        const config = ACTION_CONFIG[item.action] ?? ACTION_CONFIG.unchanged
-                        const Icon = config.icon
-                        return (
-                          <div key={i} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-accent/50 text-sm">
-                            <Icon className={`h-4 w-4 shrink-0 ${config.className}`} />
-                            <span className="font-medium truncate">{item.title || "Sans titre"}</span>
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {KIND_LABELS[item.kind] ?? item.kind}
-                            </span>
-                            {item.detail && (
-                              <span className="text-xs text-muted-foreground ml-auto truncate max-w-[200px]">
-                                {item.detail}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
+                {groups.map((group) => {
+                  const chConfig = group.chapterAction
+                    ? ACTION_CONFIG[group.chapterAction.action]
+                    : null
+
+                  const chAction = group.chapterAction?.action
+                  const hasAction = chAction && chAction !== "unchanged"
+
+                  // Icône Lucide du chapitre (dynamique depuis le nom stocké en base)
+                  const chapterIconName = group.chapterAction?.icon ?? group.items[0]?.icon
+                  const ChapterIcon = chapterIconName ? getChapterIcon(chapterIconName) : null
+
+                  return (
+                    <div key={group.label}>
+                      <div className="flex items-center gap-2 bg-muted/50 rounded-md px-3 py-2 mb-1">
+                        {ChapterIcon && (
+                          <ChapterIcon className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="text-sm font-semibold flex-1">{group.label}</span>
+                        {hasAction && chConfig && (
+                          <chConfig.icon className={`h-3.5 w-3.5 shrink-0 ${chConfig.className}`} />
+                        )}
+                      </div>
+
+                      {/* Items de contenu */}
+                      {group.items.length > 0 && (
+                        <div className="flex flex-col gap-0.5 pl-5 mb-2">
+                          {group.items.map((item, i) => {
+                            const config = ACTION_CONFIG[item.action] ?? ACTION_CONFIG.unchanged
+                            const ActionIcon = config.icon
+                            const kindCfg = KIND_CONFIG[item.kind]
+                            const KindIcon = kindCfg?.icon ?? FileText
+                            return (
+                              <div key={i} className="flex items-center gap-2.5 py-1 px-2 rounded hover:bg-accent/50 text-sm">
+                                <KindIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="truncate">{item.title || "Sans titre"}</span>
+                                <ActionIcon className={`h-3.5 w-3.5 shrink-0 ml-auto ${config.className}`} />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -186,7 +215,7 @@ export function MergePreviewDialog({ open, onOpenChange, preview, loading, onCon
               onClick={onConfirm}
               disabled={!preview || loading || !hasChanges}
             >
-              {loading ? "Import en cours..." : hasChanges ? "Confirmer l'import" : "Rien à importer"}
+              {loading ? "Import en cours..." : hasChanges ? "Confirmer l'import" : "Aucun changement"}
             </Button>
           </div>
 

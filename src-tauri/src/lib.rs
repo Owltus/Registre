@@ -70,6 +70,8 @@ pub fn run() {
             commands::files::import_json_as_new_classeur,
             commands::files::import_json_as_new_classeur_from_bytes,
             commands::files::preview_merge_json,
+            commands::files::preview_merge_json_from_content,
+            commands::files::import_classeur_json_from_content,
             commands::files::rollback_merge,
             commands::files::delete_merge_entry,
             commands::files::get_merge_history,

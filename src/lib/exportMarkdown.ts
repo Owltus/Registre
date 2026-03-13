@@ -91,15 +91,16 @@ export interface MergeResult {
   updated: number
   unchanged: number
   skipped: number
+  deleted: number
 }
 
 /** Item de prévisualisation de merge */
 export interface MergePreviewItem {
-  action: "insert" | "update" | "unchanged" | "skip"
+  action: "insert" | "update" | "unchanged" | "skip" | "delete"
   kind: string
   title: string
   chapter_label: string
-  detail: string
+  icon?: string
 }
 
 /** Résultat complet de la prévisualisation */
@@ -109,6 +110,7 @@ export interface MergePreview {
   total_update: number
   total_unchanged: number
   total_skip: number
+  total_delete: number
   warnings: string[]
 }
 
@@ -166,15 +168,29 @@ export async function selectJsonFile(): Promise<string | null> {
 /**
  * Prévisualise un merge JSON sans l'exécuter.
  */
-export async function previewMergeJson(classeurId: number, path: string): Promise<MergePreview> {
-  return invoke<MergePreview>("preview_merge_json", { classeurId, path })
+export async function previewMergeJson(classeurId: number, path: string, replace: boolean): Promise<MergePreview> {
+  return invoke<MergePreview>("preview_merge_json", { classeurId, path, replace })
+}
+
+/**
+ * Prévisualise un merge depuis un contenu JSON (sans fichier sur disque).
+ */
+export async function previewMergeJsonFromContent(classeurId: number, content: string, replace: boolean): Promise<MergePreview> {
+  return invoke<MergePreview>("preview_merge_json_from_content", { classeurId, content, replace })
 }
 
 /**
  * Importe un fichier JSON dans un classeur avec merge intelligent.
  */
-export async function importClasseurJson(classeurId: number, path: string): Promise<MergeResult> {
-  return invoke<MergeResult>("import_classeur_json", { classeurId, path })
+export async function importClasseurJson(classeurId: number, path: string, replace: boolean): Promise<MergeResult> {
+  return invoke<MergeResult>("import_classeur_json", { classeurId, path, replace })
+}
+
+/**
+ * Importe un contenu JSON dans un classeur avec merge intelligent (sans fichier sur disque).
+ */
+export async function importClasseurJsonFromContent(classeurId: number, content: string, replace: boolean): Promise<MergeResult> {
+  return invoke<MergeResult>("import_classeur_json_from_content", { classeurId, content, replace })
 }
 
 /**

@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, Fragment } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import * as Dialog from "@radix-ui/react-dialog"
-import { X, Plus, Printer, List, FileArchive, Settings, FileUp, FileDown, Search } from "lucide-react"
+import { X, Plus, Printer, List, FileArchive, Settings, FileUp, FileDown, Search, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DEFAULT_REGISTRY_NAME, buildEstablishment, type ChapterRow, type ClasseurRow } from "@/lib/navigation"
@@ -11,7 +11,7 @@ import { useMutation } from "@/lib/hooks/useMutation"
 import { sqliteAdapter } from "@/lib/db/sqlite"
 import { emit, on, CHAPTERS_CHANGED, CLASSEURS_CHANGED } from "@/lib/events"
 import { IconPicker } from "@/components/IconPicker"
-import { exportClasseurZip, type ExportChapter, exportClasseurJson, selectJsonFile, previewMergeJson, importClasseurJson, type MergePreview } from "@/lib/exportMarkdown"
+import { exportClasseurZip, type ExportChapter, exportClasseurJson, selectJsonFile, previewMergeJson, previewMergeJsonFromContent, importClasseurJson, importClasseurJsonFromContent, type MergePreview } from "@/lib/exportMarkdown"
 import { MergePreviewDialog } from "@/features/merge/MergePreviewDialog"
 import { PrintPreview } from "@/components/print/PrintPreview"
 import { ClasseurCoverPage } from "@/components/print/ClasseurCoverPage"
@@ -267,6 +267,50 @@ export default function DashboardPage() {
   const [mergeFilePath, setMergeFilePath] = useState<string | null>(null)
   const [mergeLoading, setMergeLoading] = useState(false)
 
+  // Drag-and-drop .json pour merge
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounter = useRef(0)
+  const [droppedContent, setDroppedContent] = useState<string | null>(null)
+
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current++
+    setIsDragOver(true)
+  }, [])
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
+
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current--
+    if (dragCounter.current === 0) setIsDragOver(false)
+  }, [])
+
+  const onDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounter.current = 0
+    setIsDragOver(false)
+
+    const file = Array.from(e.dataTransfer.files).find((f) => f.name.endsWith(".json"))
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      setDroppedContent(text)
+      setMergeFilePath(null)
+      setMergePreview(null)
+      setMergePreviewOpen(true)
+
+      const preview = await previewMergeJsonFromContent(Number(classeurId), text, true)
+      setMergePreview(preview)
+    } catch {
+      toast.error("Erreur lors de la prévisualisation")
+      setMergePreviewOpen(false)
+    }
+  }, [classeurId])
+
   const handleImportJson = async () => {
     try {
       const path = await selectJsonFile()
@@ -276,7 +320,7 @@ export default function DashboardPage() {
       setMergePreview(null)
       setMergePreviewOpen(true)
 
-      const preview = await previewMergeJson(Number(classeurId), path)
+      const preview = await previewMergeJson(Number(classeurId), path, true)
       setMergePreview(preview)
     } catch {
       toast.error("Erreur lors de la prévisualisation")
@@ -285,15 +329,24 @@ export default function DashboardPage() {
   }
 
   const handleConfirmMerge = async () => {
-    if (!mergeFilePath) return
+    if (!mergeFilePath && !droppedContent) return
     setMergeLoading(true)
     try {
-      const result = await importClasseurJson(Number(classeurId), mergeFilePath)
-      toast.success(`Import terminé : ${result.inserted} ajouté(s), ${result.updated} mis à jour, ${result.unchanged} inchangé(s)`)
+      const result = mergeFilePath
+        ? await importClasseurJson(Number(classeurId), mergeFilePath, true)
+        : await importClasseurJsonFromContent(Number(classeurId), droppedContent!, true)
+      const parts: string[] = []
+      if (result.inserted > 0) parts.push(`${result.inserted} créé(s)`)
+      if (result.updated > 0) parts.push(`${result.updated} mis à jour`)
+      if (result.deleted > 0) parts.push(`${result.deleted} supprimé(s)`)
+      if (result.unchanged > 0) parts.push(`${result.unchanged} inchangé(s)`)
+      if (parts.length === 0) parts.push("aucun changement")
+      toast.success(`Import terminé : ${parts.join(", ")}`)
       emit(CHAPTERS_CHANGED)
       emit(CLASSEURS_CHANGED)
       refetchChapters()
       setMergePreviewOpen(false)
+      setDroppedContent(null)
     } catch {
       toast.error("Erreur lors de l'import JSON")
     } finally {
@@ -467,12 +520,16 @@ export default function DashboardPage() {
                 </button>
                 <button
                   onClick={handleImportJson}
-                  className="flex items-center gap-4 rounded-lg border bg-card px-5 py-4 hover:bg-accent transition-colors text-left"
+                  onDragEnter={onDragEnter}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                  className={`flex items-center gap-4 rounded-lg border px-5 py-4 hover:bg-accent transition-colors text-left ${isDragOver ? "border-primary bg-primary/5" : "bg-card"}`}
                 >
-                  <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                  {isDragOver ? <Upload className="h-5 w-5 text-muted-foreground shrink-0" /> : <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />}
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">Importer un JSON</span>
-                    <span className="text-xs text-muted-foreground">Merge intelligent sans suppression</span>
+                    <span className="text-sm font-medium">{isDragOver ? "Déposez ici" : "Importer un JSON"}</span>
+                    {!isDragOver && <span className="text-xs text-muted-foreground">Merge intelligent sans suppression</span>}
                   </div>
                 </button>
               </div>

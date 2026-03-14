@@ -37,7 +37,7 @@ export function NavItem({ item, responsive = false, onClick }: NavItemProps) {
   // Feedback visuel : highlight quand un document est survolé sur ce chapitre
   const { activeDragType, activeOverId } = useDndRegistry()
   const isItemOver =
-    (activeDragType === "document" || activeDragType === "tracking_sheet")
+    (activeDragType === "document" || activeDragType === "tracking_sheet" || activeDragType === "signature_sheet" || activeDragType === "intercalaire")
     && activeOverId === item.id
 
   // Détecte si la sidebar desktop est rétractée (entre md et lg)

@@ -207,15 +207,20 @@ export default function DashboardPage() {
   const saveEdit = async () => {
     const trimmed = editValue.trim()
     if (!trimmed || !classeurId) { setEditOpen(false); return }
-    await sqliteAdapter.update("classeurs", classeurId, {
-      name: trimmed,
-      icon: editIcon,
-      etablissement: editEtablissement.trim(),
-      etablissement_complement: editComplement.trim(),
-    })
-    emit(CLASSEURS_CHANGED)
-    refetchClasseur()
-    setEditOpen(false)
+    try {
+      await sqliteAdapter.update("classeurs", classeurId, {
+        name: trimmed,
+        icon: editIcon,
+        etablissement: editEtablissement.trim(),
+        etablissement_complement: editComplement.trim(),
+      })
+      emit(CLASSEURS_CHANGED)
+      refetchClasseur()
+      setEditOpen(false)
+      toast.success("Classeur modifié")
+    } catch {
+      toast.error("Erreur lors de la modification du classeur")
+    }
   }
 
   // Construire les entrées du sommaire
@@ -246,7 +251,7 @@ export default function DashboardPage() {
           .map((d) => ({ title: d.title, content: d.content })),
       }))
       await exportClasseurZip(classeurName, data)
-      toast.success("Export Markdown terminé")
+      toast.info("Export Markdown terminé")
     } catch {
       toast.error("Erreur lors de l'export Markdown")
     }
@@ -255,7 +260,7 @@ export default function DashboardPage() {
   const handleExportJson = async () => {
     try {
       const path = await exportClasseurJson(classeurName, Number(classeurId))
-      if (path) toast.success("Export JSON terminé")
+      if (path) toast.info("Export JSON terminé")
     } catch {
       toast.error("Erreur lors de l'export JSON")
     }
@@ -341,7 +346,8 @@ export default function DashboardPage() {
       if (result.deleted > 0) parts.push(`${result.deleted} supprimé(s)`)
       if (result.unchanged > 0) parts.push(`${result.unchanged} inchangé(s)`)
       if (parts.length === 0) parts.push("aucun changement")
-      toast.success(`Import terminé : ${parts.join(", ")}`)
+      const hasDeleted = result.deleted > 0
+      ;(hasDeleted ? toast.warning : toast.success)(`Import terminé : ${parts.join(", ")}`)
       emit(CHAPTERS_CHANGED)
       emit(CLASSEURS_CHANGED)
       refetchChapters()
@@ -493,6 +499,7 @@ export default function DashboardPage() {
                   </div>
                 </button>
               </div>
+
 
               <div className="border-b border-border" />
               <button

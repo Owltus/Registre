@@ -1,4 +1,5 @@
 import React from "react"
+import { createPortal } from "react-dom"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -58,32 +59,36 @@ const markdownComponents = {
  * Phase 2 : rendu du HTML extrait de chaque page dans un <A4Page>.
  */
 export function DocumentPages({ title, subtitle, content, chapterName, classeurName, establishment, hidePagination, themed }: DocumentPagesProps) {
-  const processedContent = preprocessPageBreaks(content)
+  const processedContent = React.useMemo(() => preprocessPageBreaks(content), [content])
   const { pages, measuring, measureRef } = usePagination(processedContent)
 
   const contentWidthPx = getContentWidthPx()
 
   return (
     <>
-      {/* Conteneur de mesure caché — même styles que pdf-prose, même largeur */}
-      <div
-        ref={measureRef}
-        className="pdf-prose"
-        style={{
-          position: "fixed",
-          left: "-9999px",
-          top: 0,
-          width: `${contentWidthPx}px`,
-          visibility: "hidden",
-          fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-          fontSize: "9pt",
-          lineHeight: 1.6,
-        }}
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-          {processedContent}
-        </ReactMarkdown>
-      </div>
+      {/* Conteneur de mesure caché — rendu via portal hors de tout conteneur transformé
+           pour que getBoundingClientRect() retourne les vraies dimensions */}
+      {createPortal(
+        <div
+          ref={measureRef}
+          className="pdf-prose"
+          style={{
+            position: "fixed",
+            left: "-9999px",
+            top: 0,
+            width: `${contentWidthPx}px`,
+            visibility: "hidden",
+            fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+            fontSize: "9pt",
+            lineHeight: 1.6,
+          }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+            {processedContent}
+          </ReactMarkdown>
+        </div>,
+        document.body
+      )}
 
       {/* Pages A4 */}
       {!measuring && pages.map((page, i) => (

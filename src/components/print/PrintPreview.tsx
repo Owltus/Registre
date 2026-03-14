@@ -25,8 +25,11 @@ export function PrintPreview({ open, onOpenChange, children, filename = "documen
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const handlePrint = async () => {
-    if (scrollRef.current) {
+    if (!scrollRef.current) return
+    try {
       await printViaIframe(scrollRef.current)
+    } catch {
+      toast.error("Erreur lors de l'impression")
     }
   }
 
@@ -34,7 +37,7 @@ export function PrintPreview({ open, onOpenChange, children, filename = "documen
     if (!scrollRef.current) return
     try {
       await downloadPdf(scrollRef.current, `${filename}.pdf`)
-      toast.success("PDF enregistré avec succès")
+      toast.info("PDF enregistré")
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       toast.error("Erreur lors de la génération du PDF", { description: message })

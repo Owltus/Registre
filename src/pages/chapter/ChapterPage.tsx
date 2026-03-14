@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import type { DragEndEvent } from "@dnd-kit/core"
@@ -19,7 +19,8 @@ import { IntercalaireSheet } from "@/components/print/IntercalaireSheet"
 import { CoverPage } from "@/components/print/CoverPage"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { Plus, FileText, Pencil, Printer } from "lucide-react"
+import { Plus, FileText, Pencil, Printer, Search, X } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import type { Doc, TrackingSheet, SignatureSheet, Intercalaire, Periodicite, ChapterItem } from "./types"
 import { DocumentCard } from "./DocumentCard"
 import { TrackingSheetCard } from "./TrackingSheetCard"
@@ -32,6 +33,10 @@ import { SignatureSheetCard } from "./SignatureSheetCard"
 import { EditChapterDialog } from "./EditChapterDialog"
 import { useDropZone, DropOverlay } from "./DropZone"
 import { emit, CHAPTERS_CHANGED } from "@/lib/events"
+
+/** Retire les diacritiques et passe en minuscule pour une recherche accent-insensible */
+const stripAccents = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
 
 export default function ChapterPage() {
   const { chapterId, classeurId } = useParams<{ chapterId: string; classeurId: string }>()
@@ -101,6 +106,37 @@ export default function ChapterPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editChapterOpen, setEditChapterOpen] = useState(false)
+
+  // Recherche locale dans le chapitre
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(stripAccents(searchInput.trim())), 200)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const filteredItems = useMemo(() => {
+    if (!debouncedQuery) return localItems
+    const q = debouncedQuery
+    return localItems.filter((item) => {
+      const d = item.data
+      if (stripAccents(d.title ?? "").includes(q)) return true
+      if ("description" in d && stripAccents((d as { description?: string }).description ?? "").includes(q)) return true
+      if ("content" in d && stripAccents((d as { content?: string }).content ?? "").includes(q)) return true
+      return false
+    })
+  }, [debouncedQuery, localItems])
+
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((prev) => {
+      if (prev) { setSearchInput(""); setDebouncedQuery("") }
+      else setTimeout(() => searchRef.current?.focus(), 0)
+      return !prev
+    })
+  }, [])
 
   // Dialogs génériques — item + type
   const [editDoc, setEditDoc] = useState<Doc | null>(null)
@@ -249,6 +285,7 @@ export default function ChapterPage() {
       await updateDoc(String(editDoc.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
       refetch()
       setEditDoc(null)
+      toast.success("Document modifié")
     } catch {
       toast.error("Erreur lors de la modification")
     }
@@ -307,6 +344,7 @@ export default function ChapterPage() {
       await updateTs(String(id), { title, periodicite_id: periodiciteId })
       tsRefetch()
       setEditSheet(null)
+      toast.success("Feuille de suivi modifiée")
     } catch {
       toast.error("Erreur lors de la modification")
     }
@@ -330,6 +368,7 @@ export default function ChapterPage() {
       await updateSs(String(editSigSheet.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
       ssRefetch()
       setEditSigSheet(null)
+      toast.success("Feuille de signature modifiée")
     } catch {
       toast.error("Erreur lors de la modification")
     }
@@ -363,6 +402,7 @@ export default function ChapterPage() {
       await updateGp(String(editIntercalaire.id), { title: values.title?.trim() || "Sans titre", description: values.description?.trim() ?? "" })
       gpRefetch()
       setEditIntercalaire(null)
+      toast.success("Intercalaire modifié")
     } catch {
       toast.error("Erreur lors de la modification")
     }
@@ -392,6 +432,7 @@ export default function ChapterPage() {
         gpRefetch()
       }
       setDeleteItem(null)
+      toast.error("Élément supprimé")
     } catch {
       toast.error("Erreur lors de la suppression")
     }
@@ -400,18 +441,28 @@ export default function ChapterPage() {
   // Édition du chapitre
   const handleChapterSave = useCallback(async (label: string, description: string, icon: string) => {
     if (!chapterId) return
-    await updateChapter(chapterId, { label, description, icon })
-    chapterRefetch()
-    emit(CHAPTERS_CHANGED)
-    setEditChapterOpen(false)
+    try {
+      await updateChapter(chapterId, { label, description, icon })
+      chapterRefetch()
+      emit(CHAPTERS_CHANGED)
+      setEditChapterOpen(false)
+      toast.success("Chapitre modifié")
+    } catch {
+      toast.error("Erreur lors de la modification du chapitre")
+    }
   }, [chapterId, updateChapter, chapterRefetch])
 
   // Suppression du chapitre
   const handleChapterDelete = useCallback(async () => {
     if (!chapterId) return
-    await removeChapter(chapterId)
-    emit(CHAPTERS_CHANGED)
-    navigate(classeurId ? `/classeurs/${classeurId}` : "/")
+    try {
+      await removeChapter(chapterId)
+      emit(CHAPTERS_CHANGED)
+      toast.error("Chapitre supprimé")
+      navigate(classeurId ? `/classeurs/${classeurId}` : "/")
+    } catch {
+      toast.error("Erreur lors de la suppression du chapitre")
+    }
   }, [chapterId, classeurId, removeChapter, navigate])
 
   const deleteDialogConfig = useMemo(() => {
@@ -445,10 +496,32 @@ export default function ChapterPage() {
     <div className="flex flex-col h-full" {...dragProps}>
       {/* Header */}
       <div className="flex items-center gap-2 p-2 border-b border-border">
-        <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
-          {chapter.description || chapter.label}
-        </span>
+        {searchOpen ? (
+          <div className="relative flex-1 min-w-0 ml-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={searchRef}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Rechercher dans le chapitre..."
+              className="pl-9 h-9"
+              onKeyDown={(e) => { if (e.key === "Escape") toggleSearch() }}
+            />
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
+            {chapter.description || chapter.label}
+          </span>
+        )}
 
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant={searchOpen ? "secondary" : "outline"} size="icon" className="h-9 w-9" onClick={toggleSearch} aria-label="Rechercher">
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{searchOpen ? "Fermer la recherche" : "Rechercher"}</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPrintPreview({ type: "all" })} aria-label="Tout imprimer">
@@ -493,10 +566,16 @@ export default function ChapterPage() {
               <p className="font-medium">Aucun élément</p>
               <p className="text-sm mt-1">Cliquez sur Nouveau pour en créer un</p>
             </div>
+          ) : debouncedQuery && filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center flex-1 h-full text-center text-muted-foreground">
+              <Search className="h-10 w-10 mb-3 opacity-50" />
+              <p className="font-medium">Aucun résultat</p>
+              <p className="text-sm mt-1">Aucun élément ne correspond à votre recherche</p>
+            </div>
           ) : (
-            <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+            <SortableContext items={sortableIds} strategy={rectSortingStrategy} disabled={!!debouncedQuery}>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                {localItems.map((item) =>
+                {filteredItems.map((item) =>
                   item.kind === "document" ? (
                     <DocumentCard
                       key={`doc-${item.data.id}`}

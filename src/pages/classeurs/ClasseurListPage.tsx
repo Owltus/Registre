@@ -234,32 +234,37 @@ export default function ClasseurListPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return
-    // Soft delete en cascade : items, chapitres, puis suppression réelle du classeur
-    const now = new Date().toISOString()
-    await sqliteAdapter.execute(
-      "UPDATE documents SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
-      [deleteTarget.id, now]
-    )
-    await sqliteAdapter.execute(
-      "UPDATE tracking_sheets SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
-      [deleteTarget.id, now]
-    )
-    await sqliteAdapter.execute(
-      "UPDATE signature_sheets SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
-      [deleteTarget.id, now]
-    )
-    await sqliteAdapter.execute(
-      "UPDATE intercalaires SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
-      [deleteTarget.id, now]
-    )
-    await sqliteAdapter.execute(
-      "UPDATE chapters SET deleted_at = $2 WHERE classeur_id = $1 AND deleted_at IS NULL",
-      [deleteTarget.id, now]
-    )
-    await remove(String(deleteTarget.id))
-    emit(CLASSEURS_CHANGED)
-    refetch()
-    setDeleteTarget(null)
+    try {
+      // Soft delete en cascade : items, chapitres, puis suppression réelle du classeur
+      const now = new Date().toISOString()
+      await sqliteAdapter.execute(
+        "UPDATE documents SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
+        [deleteTarget.id, now]
+      )
+      await sqliteAdapter.execute(
+        "UPDATE tracking_sheets SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
+        [deleteTarget.id, now]
+      )
+      await sqliteAdapter.execute(
+        "UPDATE signature_sheets SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
+        [deleteTarget.id, now]
+      )
+      await sqliteAdapter.execute(
+        "UPDATE intercalaires SET deleted_at = $2 WHERE chapter_id IN (SELECT id FROM chapters WHERE classeur_id = $1) AND deleted_at IS NULL",
+        [deleteTarget.id, now]
+      )
+      await sqliteAdapter.execute(
+        "UPDATE chapters SET deleted_at = $2 WHERE classeur_id = $1 AND deleted_at IS NULL",
+        [deleteTarget.id, now]
+      )
+      await remove(String(deleteTarget.id))
+      emit(CLASSEURS_CHANGED)
+      refetch()
+      setDeleteTarget(null)
+      toast.error("Classeur supprimé")
+    } catch {
+      toast.error("Erreur lors de la suppression du classeur")
+    }
   }
 
   return (

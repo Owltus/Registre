@@ -83,7 +83,7 @@ export function SettingsDialog({ open, onOpenChange, classeurId, classeurName }:
     setBusy(entry.id)
     try {
       await rollbackMerge(entry.id)
-      toast.success("Restauration effectuée")
+      toast.warning("Restauration effectuée")
       emit(CHAPTERS_CHANGED)
       refreshHistory()
     } catch {
@@ -98,7 +98,7 @@ export function SettingsDialog({ open, onOpenChange, classeurId, classeurName }:
     setBusy(deleteTarget.id)
     try {
       await deleteMergeEntry(deleteTarget.id)
-      toast.success("Sauvegarde supprimée")
+      toast.error("Sauvegarde supprimée")
       refreshHistory()
     } catch {
       toast.error("Erreur lors de la suppression")
@@ -129,7 +129,8 @@ export function SettingsDialog({ open, onOpenChange, classeurId, classeurName }:
       const date = new Date(entry.merged_at).toISOString().slice(0, 10)
       const name = classeurName || "Classeur"
       const result = await downloadMergeSnapshot(entry.id, `${name} ${title.toLowerCase()} ${date}`)
-      if (result) toast.success("Fichier enregistré")
+      if (result) toast.info("Fichier enregistré")
+      else toast.warning("Téléchargement annulé")
     } catch {
       toast.error("Erreur lors du téléchargement")
     } finally {

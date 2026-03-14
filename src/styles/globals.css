@@ -30,6 +30,8 @@
     --status-warning-bg: 38 92% 95%;
     --status-danger:     0 84% 60%;
     --status-danger-bg:  0 84% 95%;
+    --status-info:       210 92% 45%;
+    --status-info-bg:    210 92% 95%;
   }
 
   .dark {
@@ -58,6 +60,8 @@
     --status-warning-bg: 38 92% 12%;
     --status-danger:     0 62.8% 55%;
     --status-danger-bg:  0 84% 12%;
+    --status-info:       210 80% 65%;
+    --status-info-bg:    210 80% 12%;
   }
 }
 
@@ -494,6 +498,55 @@
 }
 .a4-debug .dbg-rule {
   background-color: rgba(255, 0, 0, 0.5) !important;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Toast notifications (sonner) — couleurs thématiques    */
+/* Override des variables sonner pour synchroniser avec   */
+/* notre système light/dark via les CSS custom properties */
+/* ═══════════════════════════════════════════════════════ */
+
+html:root [data-sonner-toaster] {
+  --normal-bg: hsl(var(--card));
+  --normal-border: hsl(var(--border));
+  --normal-text: hsl(var(--card-foreground));
+
+  --success-bg: hsl(var(--status-success) / 0.06);
+  --success-border: hsl(var(--status-success) / 0.15);
+  --success-text: hsl(var(--status-success));
+
+  --error-bg: hsl(var(--status-danger) / 0.06);
+  --error-border: hsl(var(--status-danger) / 0.15);
+  --error-text: hsl(var(--status-danger));
+
+  --warning-bg: hsl(var(--status-warning) / 0.06);
+  --warning-border: hsl(var(--status-warning) / 0.15);
+  --warning-text: hsl(var(--status-warning));
+
+  --info-bg: hsl(var(--status-info) / 0.06);
+  --info-border: hsl(var(--status-info) / 0.15);
+  --info-text: hsl(var(--status-info));
+}
+
+/* Accent coloré sur le bord gauche + fond glass des toasts typés */
+html [data-rich-colors='true'][data-sonner-toast][data-type='success'],
+html [data-rich-colors='true'][data-sonner-toast][data-type='error'],
+html [data-rich-colors='true'][data-sonner-toast][data-type='warning'],
+html [data-rich-colors='true'][data-sonner-toast][data-type='info'] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+html [data-rich-colors='true'][data-sonner-toast][data-type='success'] {
+  border-left: 3px solid hsl(var(--status-success));
+}
+html [data-rich-colors='true'][data-sonner-toast][data-type='error'] {
+  border-left: 3px solid hsl(var(--status-danger));
+}
+html [data-rich-colors='true'][data-sonner-toast][data-type='warning'] {
+  border-left: 3px solid hsl(var(--status-warning));
+}
+html [data-rich-colors='true'][data-sonner-toast][data-type='info'] {
+  border-left: 3px solid hsl(var(--status-info));
 }
 
 /* ═══════════════════════════════════════════════════════ */

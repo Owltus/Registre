@@ -108,11 +108,11 @@ jobs:
             echo ""
             echo "### Changelog"
             echo ""
-            echo "> ${COMMIT_COUNT} modifications depuis la version ${PREV_VERSION:-initiale}"
           } > release-notes.md
 
           # Generer le detail de chaque commit
           if [ -n "$HASHES" ]; then
+            echo "> ${COMMIT_COUNT} modifications depuis la version ${PREV_VERSION:-initiale}" >> release-notes.md
             echo "$HASHES" | while read h; do
               SUBJECT=$(git log -1 --pretty=format:"%s" "$h")
               BODY=$(git log -1 --pretty=format:"%b" "$h")

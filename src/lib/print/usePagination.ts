@@ -31,6 +31,7 @@ export function usePagination(contentKey?: string): PaginationResult {
   const [pages, setPages] = useState<PageData[]>([])
   const [measuring, setMeasuring] = useState(true)
   const lastKey = useRef<string | undefined>(undefined)
+  const hasPaginated = useRef(false)
 
   const measureRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -38,7 +39,11 @@ export function usePagination(contentKey?: string): PaginationResult {
     if (lastKey.current === contentKey && pages.length > 0) return
     lastKey.current = contentKey
 
-    setMeasuring(true)
+    // Ne montrer le spinner que lors de la première pagination,
+    // pas lors des re-paginations (pour éviter de détruire le DOM et le scroll)
+    if (!hasPaginated.current) {
+      setMeasuring(true)
+    }
 
     // Attendre que le DOM ait fini de peindre + que les Mermaid soient rendus
     requestAnimationFrame(() => {
@@ -48,6 +53,7 @@ export function usePagination(contentKey?: string): PaginationResult {
 
         setPages(pageData)
         setMeasuring(false)
+        hasPaginated.current = true
       })
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps

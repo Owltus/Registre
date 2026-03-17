@@ -90,8 +90,9 @@ export function DocumentPages({ title, subtitle, content, chapterName, classeurN
         document.body
       )}
 
-      {/* Pages A4 */}
-      {!measuring && pages.map((page, i) => (
+      {/* Pages A4 — on garde les anciennes pages visibles pendant la re-mesure
+           pour ne pas détruire le DOM ni perdre la position de scroll */}
+      {pages.map((page, i) => (
         <A4Page
           key={i}
           title={title}
@@ -107,8 +108,8 @@ export function DocumentPages({ title, subtitle, content, chapterName, classeurN
         </A4Page>
       ))}
 
-      {/* Spinner pendant la mesure */}
-      {measuring && (
+      {/* Spinner uniquement lors du tout premier chargement */}
+      {measuring && pages.length === 0 && (
         <div className="flex items-center justify-center py-12" role="status" aria-label="Chargement">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
         </div>

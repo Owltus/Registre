@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
-import { Trash2, FileDown, FileText, Pencil, FileOutput } from "lucide-react"
+import { Trash2, FileDown, FileText, Pencil, FileOutput, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { DocumentPages } from "@/components/print/DocumentPages"
@@ -20,12 +20,16 @@ interface DocumentCardProps {
   classeurName?: string
   establishment?: string
   sortableDisabled?: boolean
+  selectionMode?: boolean
+  selectionDragging?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
   onExport?: (e: React.MouseEvent, doc: Doc) => void
   onEdit?: (e: React.MouseEvent, doc: Doc) => void
   onDelete?: (e: React.MouseEvent, doc: Doc) => void
 }
 
-export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeurName, establishment, sortableDisabled, onExport, onEdit, onDelete }: DocumentCardProps) {
+export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeurName, establishment, sortableDisabled, selectionMode, selectionDragging, isSelected, onToggleSelect, onExport, onEdit, onDelete }: DocumentCardProps) {
   const navigate = useNavigate()
 
   const dragData: DocumentDragData = useMemo(() => ({
@@ -48,7 +52,7 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
     disabled: sortableDisabled,
   })
 
-  const style = {
+  const style = selectionMode ? undefined : {
     transform: CSS.Transform.toString(transform),
     transition,
   }
@@ -58,9 +62,18 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
     exportMarkdown(doc.title, doc.content)
   }, [doc.title, doc.content])
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      onToggleSelect?.()
+      return
+    }
+    if (selectionMode) {
+      onToggleSelect?.()
+      return
+    }
     navigate(classeurId ? `/classeurs/${classeurId}/chapitres/${chapterId}/documents/${doc.id}` : `/chapitres/${chapterId}/documents/${doc.id}`)
-  }, [navigate, chapterId, doc.id, classeurId])
+  }, [navigate, chapterId, doc.id, classeurId, selectionMode, onToggleSelect])
 
   return (
     <div
@@ -71,7 +84,9 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
       className={cn(
         "group relative flex flex-col rounded-lg border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors overflow-hidden",
         !sortableDisabled && "touch-none",
-        isDragging && "opacity-30 z-50"
+        !selectionMode && isDragging && "opacity-30 z-50",
+        selectionDragging && isSelected && "opacity-30",
+        isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20"
       )}
       onClick={handleClick}
     >
@@ -86,6 +101,21 @@ export function DocumentCard({ doc, chapterId, classeurId, chapterName, classeur
           </TooltipTrigger>
           <TooltipContent>{doc.title || "Sans titre"}</TooltipContent>
         </Tooltip>
+        {/* Checkbox de sélection */}
+        <button
+          type="button"
+          className={cn(
+            "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-all",
+            isSelected
+              ? "bg-primary border-primary text-primary-foreground"
+              : "border-muted-foreground/30 opacity-0 group-hover:opacity-100",
+            selectionMode && "opacity-100"
+          )}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect?.() }}
+          aria-label={isSelected ? "Désélectionner" : "Sélectionner"}
+        >
+          {isSelected && <Check className="h-3 w-3" />}
+        </button>
       </div>
 
       {/* Miniature + boutons en surimpression */}

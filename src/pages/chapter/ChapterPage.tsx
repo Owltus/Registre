@@ -19,7 +19,7 @@ import { IntercalaireSheet } from "@/components/print/IntercalaireSheet"
 import { CoverPage } from "@/components/print/CoverPage"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { Plus, FileText, Pencil, Printer, Search, X, Archive } from "lucide-react"
+import { Plus, FileText, Pencil, Printer, Search, X, Archive, Trash2, CheckSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import type { Doc, TrackingSheet, SignatureSheet, Intercalaire, Periodicite, ChapterItem } from "./types"
 import { DocumentCard } from "./DocumentCard"
@@ -35,6 +35,11 @@ import { useDropZone, DropOverlay } from "./DropZone"
 import { emit, CHAPTERS_CHANGED } from "@/lib/events"
 import { exportClasseurZip, type ExportChapter } from "@/lib/exportMarkdown"
 import { stripAccents } from "@/lib/utils"
+import { useSelection, toSelectionKey, fromSelectionKey } from "./hooks/useSelection"
+import { BulkDeleteDialog } from "./BulkDeleteDialog"
+
+/** Stratégie de tri no-op pour désactiver le réordonnancement visuel en mode sélection */
+const noopStrategy = () => null
 
 export default function ChapterPage() {
   const { chapterId, classeurId } = useParams<{ chapterId: string; classeurId: string }>()
@@ -70,6 +75,10 @@ export default function ChapterPage() {
   const { data: intercalaires, loading: gpLoading, refetch: gpRefetch } = useQuery<Intercalaire>("intercalaires", filters)
   const { insert: insertGp, update: updateGp, remove: removeGp } = useMutation("intercalaires")
 
+  const refetchAll = useCallback(() => {
+    refetch(); tsRefetch(); ssRefetch(); gpRefetch()
+  }, [refetch, tsRefetch, ssRefetch, gpRefetch])
+
   // Liste unifiée triée par sort_order
   const allItems: ChapterItem[] = useMemo(() => {
     const items: ChapterItem[] = [
@@ -101,6 +110,17 @@ export default function ChapterPage() {
     }),
     [localItems]
   )
+
+  // Multi-sélection
+  const selection = useSelection()
+
+  // Dialogs bulk
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+
+  // Vider la sélection quand on change de chapitre
+  useEffect(() => {
+    selection.clear()
+  }, [chapterId, selection])
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editChapterOpen, setEditChapterOpen] = useState(false)
@@ -180,6 +200,7 @@ export default function ChapterPage() {
 
   // Drag-and-drop unifié : réordonnancement OU déplacement vers un autre chapitre
   const dndRegistry = useDndRegistry()
+  const selectionDragging = selection.selectionMode && dndRegistry.activeDragType !== null
 
   const handleItemDrop = useCallback(
     async (event: DragEndEvent) => {
@@ -191,29 +212,39 @@ export default function ChapterPage() {
 
       const overData = over.data.current as { type?: string; chapterId?: string } | undefined
 
-      // Cas 1 : drop sur un chapitre de la sidebar → déplacer l'item
+      // Cas 1 : drop sur un chapitre de la sidebar → déplacer l'item (ou la sélection)
       if (overData?.type === "chapter") {
         const targetChapterId = overData.chapterId ?? String(over.id)
         const sourceChapterId = data.sourceChapterId
         if (targetChapterId === sourceChapterId) return
 
-        if (data.type === "document") {
-          await updateDoc(String(data.docId), { chapter_id: targetChapterId })
-          refetch()
-        } else if (data.type === "tracking_sheet") {
-          await updateTs(String(data.sheetId), { chapter_id: targetChapterId })
-          tsRefetch()
-        } else if (data.type === "signature_sheet") {
-          await updateSs(String(data.sheetId), { chapter_id: targetChapterId })
-          ssRefetch()
-        } else {
-          await updateGp(String(data.pageId), { chapter_id: targetChapterId })
-          gpRefetch()
+        // Mode sélection : déplacer tous les éléments sélectionnés
+        if (selection.selectionMode && selection.count > 0) {
+          const keys = Array.from(selection.selected)
+          await Promise.all(keys.map((key) => {
+            const { kind, id } = fromSelectionKey(key)
+            if (kind === "document") return updateDoc(String(id), { chapter_id: targetChapterId })
+            if (kind === "tracking_sheet") return updateTs(String(id), { chapter_id: targetChapterId })
+            if (kind === "signature_sheet") return updateSs(String(id), { chapter_id: targetChapterId })
+            return updateGp(String(id), { chapter_id: targetChapterId })
+          }))
+          refetchAll()
+          toast.success(`${keys.length} élément${keys.length > 1 ? "s" : ""} déplacé${keys.length > 1 ? "s" : ""}`)
+          selection.clear()
+          return
         }
+
+        // Mode normal : déplacer un seul item
+        if (data.type === "document") await updateDoc(String(data.docId), { chapter_id: targetChapterId })
+        else if (data.type === "tracking_sheet") await updateTs(String(data.sheetId), { chapter_id: targetChapterId })
+        else if (data.type === "signature_sheet") await updateSs(String(data.sheetId), { chapter_id: targetChapterId })
+        else await updateGp(String(data.pageId), { chapter_id: targetChapterId })
+        refetchAll()
         return
       }
 
-      // Cas 2 : drop sur un autre item → réordonner
+      // Cas 2 : drop sur un autre item → réordonner (désactivé en mode sélection)
+      if (selection.selectionMode) return
       const overType = overData?.type
       if (overType === "document" || overType === "tracking_sheet" || overType === "signature_sheet" || overType === "intercalaire") {
         const activeId = String(active.id)
@@ -248,10 +279,10 @@ export default function ChapterPage() {
             }
           })
         )
-        refetch(); tsRefetch(); ssRefetch(); gpRefetch()
+        refetchAll()
       }
     },
-    [localItems, setLocalItems, updateDoc, updateTs, updateSs, updateGp, refetch, tsRefetch, ssRefetch, gpRefetch]
+    [localItems, setLocalItems, updateDoc, updateTs, updateSs, updateGp, refetchAll, selection]
   )
 
   useEffect(() => {
@@ -418,25 +449,17 @@ export default function ChapterPage() {
     if (!deleteItem) return
     try {
       const { item, kind } = deleteItem
-      if (kind === "document") {
-        await remove(String(item.id))
-        refetch()
-      } else if (kind === "tracking_sheet") {
-        await removeTs(String(item.id))
-        tsRefetch()
-      } else if (kind === "signature_sheet") {
-        await removeSs(String(item.id))
-        ssRefetch()
-      } else {
-        await removeGp(String(item.id))
-        gpRefetch()
-      }
+      if (kind === "document") await remove(String(item.id))
+      else if (kind === "tracking_sheet") await removeTs(String(item.id))
+      else if (kind === "signature_sheet") await removeSs(String(item.id))
+      else await removeGp(String(item.id))
+      refetchAll()
       setDeleteItem(null)
-      toast.error("Élément supprimé")
+      toast.success("Élément supprimé")
     } catch {
       toast.error(`Erreur lors de la suppression de « ${deleteItem.item.title} »`)
     }
-  }, [deleteItem, remove, removeTs, removeSs, removeGp, refetch, tsRefetch, ssRefetch, gpRefetch])
+  }, [deleteItem, remove, removeTs, removeSs, removeGp, refetchAll])
 
   // Édition du chapitre
   const handleChapterSave = useCallback(async (label: string, description: string, icon: string) => {
@@ -476,6 +499,26 @@ export default function ChapterPage() {
     return labels[deleteItem.kind]
   }, [deleteItem])
 
+  // Suppression groupée
+  const handleBulkDelete = useCallback(async () => {
+    try {
+      const keys = Array.from(selection.selected)
+      await Promise.all(keys.map((key) => {
+        const { kind, id } = fromSelectionKey(key)
+        if (kind === "document") return remove(String(id))
+        if (kind === "tracking_sheet") return removeTs(String(id))
+        if (kind === "signature_sheet") return removeSs(String(id))
+        return removeGp(String(id))
+      }))
+      refetchAll()
+      selection.clear()
+      setBulkDeleteOpen(false)
+      toast.success(`${keys.length} élément${keys.length > 1 ? "s" : ""} supprimé${keys.length > 1 ? "s" : ""}`)
+    } catch {
+      toast.error("Erreur lors de la suppression groupée")
+    }
+  }, [selection, remove, removeTs, removeSs, removeGp, refetchAll])
+
   const handleExportMarkdown = useCallback(async () => {
     if (!chapter) return
     try {
@@ -511,65 +554,99 @@ export default function ChapterPage() {
     <div className="flex flex-col h-full" {...dragProps}>
       {/* Header */}
       <div className="flex items-center gap-2 p-2 border-b border-border">
-        {searchOpen ? (
-          <div className="relative flex-1 min-w-0 ml-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={searchRef}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Rechercher dans le chapitre..."
-              className="pl-9 h-9"
-              onKeyDown={(e) => { if (e.key === "Escape") toggleSearch() }}
-              aria-label="Rechercher"
-            />
-          </div>
+        {selection.selectionMode ? (
+          <>
+            <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
+              {selection.count} élément{selection.count > 1 ? "s" : ""} sélectionné{selection.count > 1 ? "s" : ""}
+            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => selection.selectAll(filteredItems)} aria-label="Tout sélectionner">
+                  <CheckSquare className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Tout sélectionner</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setBulkDeleteOpen(true)} aria-label="Supprimer la sélection">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Supprimer la sélection</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={selection.clear} aria-label="Annuler la sélection">
+                  <X className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Annuler la sélection</TooltipContent>
+            </Tooltip>
+          </>
         ) : (
-          <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
-            {chapter.description || chapter.label}
-          </span>
-        )}
+          <>
+            {searchOpen ? (
+              <div className="relative flex-1 min-w-0 ml-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  ref={searchRef}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Rechercher dans le chapitre..."
+                  className="pl-9 h-9"
+                  onKeyDown={(e) => { if (e.key === "Escape") toggleSearch() }}
+                  aria-label="Rechercher"
+                />
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground truncate flex-1 min-w-0 ml-2">
+                {chapter.description || chapter.label}
+              </span>
+            )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant={searchOpen ? "secondary" : "outline"} size="icon" className="h-9 w-9" onClick={toggleSearch} aria-label="Rechercher">
-              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{searchOpen ? "Fermer la recherche" : "Rechercher"}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPrintPreview({ type: "all" })} aria-label="Tout imprimer">
-              <Printer className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Tout imprimer</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleExportMarkdown} aria-label="Exporter en Markdown">
-              <Archive className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Exporter en Markdown</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setEditChapterOpen(true)} aria-label="Édition">
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Édition</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCreateOpen(true)} aria-label="Nouveau">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Nouveau</TooltipContent>
-        </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant={searchOpen ? "secondary" : "outline"} size="icon" className="h-9 w-9" onClick={toggleSearch} aria-label="Rechercher">
+                  {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{searchOpen ? "Fermer la recherche" : "Rechercher"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setPrintPreview({ type: "all" })} aria-label="Tout imprimer">
+                  <Printer className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Tout imprimer</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleExportMarkdown} aria-label="Exporter en Markdown">
+                  <Archive className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Exporter en Markdown</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setEditChapterOpen(true)} aria-label="Édition">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Édition</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setCreateOpen(true)} aria-label="Nouveau">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Nouveau</TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </div>
 
       {/* Corps */}
@@ -597,10 +674,11 @@ export default function ChapterPage() {
               <p className="text-sm mt-1">Aucun élément ne correspond à votre recherche</p>
             </div>
           ) : (
-            <SortableContext items={sortableIds} strategy={rectSortingStrategy} disabled={!!debouncedQuery}>
+            <SortableContext items={sortableIds} strategy={selection.selectionMode ? noopStrategy : rectSortingStrategy} disabled={!!debouncedQuery}>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                {filteredItems.map((item) =>
-                  item.kind === "document" ? (
+                {filteredItems.map((item) => {
+                  const selKey = toSelectionKey(item.kind, item.data.id)
+                  return item.kind === "document" ? (
                     <DocumentCard
                       key={`doc-${item.data.id}`}
                       doc={item.data}
@@ -609,6 +687,10 @@ export default function ChapterPage() {
                       chapterName={chapter?.label}
                       classeurName={classeurName}
                       establishment={establishment}
+                      selectionMode={selection.selectionMode}
+                      selectionDragging={selectionDragging}
+                      isSelected={selection.selected.has(selKey)}
+                      onToggleSelect={() => selection.toggle(selKey)}
                       onExport={handleExport}
                       onEdit={handleDocEditClick}
                       onDelete={(e, d) => handleDeleteClick(e, d, "document")}
@@ -623,6 +705,10 @@ export default function ChapterPage() {
                       classeurName={classeurName}
                       establishment={establishment}
                       periodicite={periodicites.find((p) => p.id === (item.data as TrackingSheet).periodicite_id)}
+                      selectionMode={selection.selectionMode}
+                      selectionDragging={selectionDragging}
+                      isSelected={selection.selected.has(selKey)}
+                      onToggleSelect={() => selection.toggle(selKey)}
                       onExport={handleTsExport}
                       onEdit={handleTsEditClick}
                       onDelete={(e, s) => handleDeleteClick(e, s, "tracking_sheet")}
@@ -636,6 +722,10 @@ export default function ChapterPage() {
                       chapterName={chapter?.label}
                       classeurName={classeurName}
                       establishment={establishment}
+                      selectionMode={selection.selectionMode}
+                      selectionDragging={selectionDragging}
+                      isSelected={selection.selected.has(selKey)}
+                      onToggleSelect={() => selection.toggle(selKey)}
                       onExport={handleSsExport}
                       onEdit={handleSsEditClick}
                       onDelete={(e, s) => handleDeleteClick(e, s, "signature_sheet")}
@@ -649,12 +739,16 @@ export default function ChapterPage() {
                       chapterName={chapter?.label}
                       classeurName={classeurName}
                       establishment={establishment}
+                      selectionMode={selection.selectionMode}
+                      selectionDragging={selectionDragging}
+                      isSelected={selection.selected.has(selKey)}
+                      onToggleSelect={() => selection.toggle(selKey)}
                       onExport={handleGpExport}
                       onEdit={handleGpEditClick}
                       onDelete={(e, p) => handleDeleteClick(e, p, "intercalaire")}
                     />
                   )
-                )}
+                })}
               </div>
             </SortableContext>
           )}
@@ -824,6 +918,13 @@ export default function ChapterPage() {
         chapter={chapter}
         onSave={handleChapterSave}
         onDelete={handleChapterDelete}
+      />
+
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        count={selection.count}
+        onClose={() => setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
       />
     </div>
   )

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
-import { Trash2, FileDown, Pencil, BookMarked } from "lucide-react"
+import { Trash2, FileDown, Pencil, BookMarked, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { IntercalaireSheet } from "@/components/print/IntercalaireSheet"
@@ -19,12 +19,16 @@ interface IntercalaireCardProps {
   classeurName?: string
   establishment?: string
   sortableDisabled?: boolean
+  selectionMode?: boolean
+  selectionDragging?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
   onExport?: (e: React.MouseEvent, page: Intercalaire) => void
   onEdit?: (e: React.MouseEvent, page: Intercalaire) => void
   onDelete?: (e: React.MouseEvent, page: Intercalaire) => void
 }
 
-export function IntercalaireCard({ page, chapterId, classeurId, chapterName, classeurName, establishment, sortableDisabled, onExport, onEdit, onDelete }: IntercalaireCardProps) {
+export function IntercalaireCard({ page, chapterId, classeurId, chapterName, classeurName, establishment, sortableDisabled, selectionMode, selectionDragging, isSelected, onToggleSelect, onExport, onEdit, onDelete }: IntercalaireCardProps) {
   const navigate = useNavigate()
 
   const dragData: IntercalaireDragData = useMemo(() => ({
@@ -47,14 +51,23 @@ export function IntercalaireCard({ page, chapterId, classeurId, chapterName, cla
     disabled: sortableDisabled,
   })
 
-  const style = {
+  const style = selectionMode ? undefined : {
     transform: CSS.Transform.toString(transform),
     transition,
   }
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      onToggleSelect?.()
+      return
+    }
+    if (selectionMode) {
+      onToggleSelect?.()
+      return
+    }
     navigate(classeurId ? `/classeurs/${classeurId}/chapitres/${chapterId}/intercalaires/${page.id}` : `/chapitres/${chapterId}/intercalaires/${page.id}`)
-  }, [navigate, chapterId, page.id, classeurId])
+  }, [navigate, chapterId, page.id, classeurId, selectionMode, onToggleSelect])
 
   return (
     <div
@@ -65,7 +78,9 @@ export function IntercalaireCard({ page, chapterId, classeurId, chapterName, cla
       className={cn(
         "group relative flex flex-col rounded-lg border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors overflow-hidden",
         !sortableDisabled && "touch-none",
-        isDragging && "opacity-30 z-50"
+        !selectionMode && isDragging && "opacity-30 z-50",
+        selectionDragging && isSelected && "opacity-30",
+        isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20"
       )}
       onClick={handleClick}
     >
@@ -80,6 +95,20 @@ export function IntercalaireCard({ page, chapterId, classeurId, chapterName, cla
           </TooltipTrigger>
           <TooltipContent>{page.title || "Sans titre"}</TooltipContent>
         </Tooltip>
+        <button
+          type="button"
+          className={cn(
+            "h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-all",
+            isSelected
+              ? "bg-primary border-primary text-primary-foreground"
+              : "border-muted-foreground/30 opacity-0 group-hover:opacity-100",
+            selectionMode && "opacity-100"
+          )}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect?.() }}
+          aria-label={isSelected ? "Désélectionner" : "Sélectionner"}
+        >
+          {isSelected && <Check className="h-3 w-3" />}
+        </button>
       </div>
 
       {/* Miniature + boutons en surimpression */}

@@ -3,7 +3,7 @@ name: commit
 description: Commit Git avec versioning semantique optionnel. Corrige ESLint, message Conventional Commits en francais, bumpp pour version/tag (si argument), et push.
 disable-model-invocation: true
 argument-hint: [patch|minor|major]
-allowed-tools: Read, Edit, Bash(git:*), Bash(npx:*), Bash(npm:*)
+allowed-tools: Read, Edit, Bash(git:*), Bash(pnpm:*)
 ---
 
 # Skill /commit - Commit avec Versioning Optionnel
@@ -39,7 +39,7 @@ git diff
 ### Etape 2: Corriger ESLint
 
 ```bash
-npx eslint --fix .
+pnpm exec eslint --fix .
 ```
 
 - Si erreurs restantes: les corriger manuellement avec Edit
@@ -155,25 +155,65 @@ EOF
 
 **Si `$ARGUMENTS` contient `patch`, `minor` ou `major`:** executer le bump.
 
+#### 6a: Executer bumpp
+
 ```bash
-npm run release:patch -- --yes   # si $ARGUMENTS = "patch"
-npm run release:minor -- --yes   # si $ARGUMENTS = "minor"
-npm run release:major -- --yes   # si $ARGUMENTS = "major"
+pnpm run release:patch   # si $ARGUMENTS = "patch"
+pnpm run release:minor   # si $ARGUMENTS = "minor"
+pnpm run release:major   # si $ARGUMENTS = "major"
 ```
 
 Cette commande (via bumpp) fait automatiquement:
-- Met a jour `package.json` avec la nouvelle version
+- Met a jour les 3 fichiers de version (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`)
 - Cree un commit "build: release vX.Y.Z"
 - Cree le tag git vX.Y.Z
 
-### Etape 7: Push
+#### 6b: Regenerer Cargo.lock
 
 ```bash
-git push origin HEAD
-git push origin --tags
+cd src-tauri && cargo generate-lockfile
 ```
 
+Cargo.toml a ete modifie par bumpp, il faut regenerer le lockfile sans recompiler.
+
+#### 6c: Amender le commit bumpp avec Cargo.lock
+
+```bash
+git add src-tauri/Cargo.lock && git commit --amend --no-edit
+```
+
+Cela integre Cargo.lock dans le commit de release sans creer un commit supplementaire.
+
+### Etape 7: Rapport final et push
+
+#### 7a: Afficher le rapport
+
+**Avec bump (argument patch/minor/major):**
+```
+Commit effectue:
+- Message: type(scope): description
+- Version: X.Y.Z -> X.Y.Z (via bumpp)
+- Tag: vX.Y.Z
+- Fichiers: N fichiers modifies
+```
+
+**Sans bump (pas d'argument):**
+```
+Commit effectue:
+- Message: type(scope): description
+- Version: non modifiee
+- Tag: aucun
+- Fichiers: N fichiers modifies
+```
+
+#### 7b: Demander confirmation pour le push
+
+Demander a l'utilisateur : **"Push vers origin ? (oui/non)"**
+
 - Si pas de remote configure: warning et skip le push
+- Si l'utilisateur refuse: afficher "Push skipped"
+- Si l'utilisateur accepte et **sans bump**: `git push origin HEAD`
+- Si l'utilisateur accepte et **avec bump**: `git push origin HEAD && git push origin --tags`
 
 ---
 
@@ -187,31 +227,6 @@ git push origin --tags
 | Pas d'argument | Commit sans bump (comportement normal) |
 | Pas de package.json | Skip bumpp meme si argument fourni |
 | bumpp echoue | Afficher erreur, le commit principal est deja fait |
+| cargo generate-lockfile echoue | Afficher erreur, le commit bumpp est fait mais Cargo.lock pas a jour — corriger manuellement |
 | Pas de remote | Warning, skip push |
 | Push echoue | Afficher erreur |
-
----
-
-## Rapport final
-
-Afficher un resume structure:
-
-**Avec bump (argument patch/minor/major):**
-```
-Commit effectue:
-- Message: type(scope): description
-- Version: X.Y.Z -> X.Y.Z (via bumpp)
-- Tag: vX.Y.Z
-- Push: OK / Skipped
-- Fichiers: N fichiers modifies
-```
-
-**Sans bump (pas d'argument):**
-```
-Commit effectue:
-- Message: type(scope): description
-- Version: non modifiee
-- Tag: aucun
-- Push: OK / Skipped
-- Fichiers: N fichiers modifies
-```
